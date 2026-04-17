@@ -20,8 +20,24 @@
         container: '#pdfsign',
         bridgeUrl: 'wss://localhost:9505',
         allowFileOpen: true,
-        onSigned: (blob, filename, bytes) => {
+        onSigned: (blob, filename, bytes, base64) => {
             console.log('Signed PDF:', filename, 'size:', bytes.length);
+            // Có đủ 4 format để sử dụng:
+            //   blob     — Blob object, upload qua FormData
+            //   filename — tên file (ví dụ 'signed_document.pdf')
+            //   bytes    — Uint8Array (raw bytes)
+            //   base64   — chuỗi base64 (JSON payload / lưu DB / gửi API)
+            //
+            // Ví dụ upload qua FormData:
+            //   const fd = new FormData();
+            //   fd.append('file', blob, filename);
+            //   fetch('/api/upload-signed', { method: 'POST', body: fd });
+            //
+            // Ví dụ gửi JSON với base64:
+            //   fetch('/api/save-signed', {
+            //     method: 'POST', headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify({ filename, pdfBase64: base64 })
+            //   });
         },
         onError: (err) => {
             console.error('Sign error:', err);

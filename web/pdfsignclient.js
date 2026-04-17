@@ -1206,7 +1206,9 @@
                 setTimeout(() => prog.style.display = 'none', 2000);
 
                 if (typeof this.cfg.onSigned === 'function') {
-                    this.cfg.onSigned(blob, outName, signed);
+                    // Cung cấp đủ: Blob (FormData upload), Uint8Array (raw), base64 (JSON payload)
+                    const base64 = bytesToB64(signed);
+                    this.cfg.onSigned(blob, outName, signed, base64);
                 }
             } catch (err) {
                 this._fail(err);

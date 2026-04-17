@@ -80,7 +80,9 @@
 .pdfsign-close-btn { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); width: 32px; height: 32px; border-radius: 4px; cursor: pointer; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; margin-left: 10px; padding: 0; }
 .pdfsign-close-btn:hover { background: var(--pdfsign-danger); border-color: var(--pdfsign-danger); }
 .pdfsign-spacer { flex: 1; }
-.pdfsign-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,0.85); }
+.pdfsign-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,0.85); cursor: pointer; padding: 4px 10px; border-radius: 4px; transition: background 0.15s; }
+.pdfsign-status:hover { background: rgba(255,255,255,0.1); }
+.pdfsign-status.disconnected { background: var(--pdfsign-danger-bg, rgba(237,84,44,0.2)); border: 1px solid rgba(237,84,44,0.4); }
 .pdfsign-dot { width: 8px; height: 8px; border-radius: 50%; }
 .pdfsign-dot.on { background: var(--pdfsign-success); box-shadow: 0 0 6px var(--pdfsign-success); }
 .pdfsign-dot.off { background: var(--pdfsign-danger); }
@@ -355,7 +357,7 @@
   <div class="pdfsign-header">
     <span class="pdfsign-brand">${title}</span>
     <div class="pdfsign-spacer"></div>
-    <div class="pdfsign-status">
+    <div class="pdfsign-status" data-role="statusBar" data-act="showHelp" title="Bấm để xem hướng dẫn cài đặt hSignerBridge">
       <div class="pdfsign-dot off" data-role="dot"></div>
       <span data-role="status">Đang kết nối...</span>
     </div>
@@ -478,7 +480,7 @@
                 dot.addEventListener('click', () => this._setColor(dot.dataset.color, dot));
             });
             // Direct bindings cho các nút quan trọng (safeguard cho Firefox event delegation)
-            r.querySelectorAll('[data-act]').forEach(el => {
+            r.querySelectorAll('[data-act="showHelp"], [data-act="close"]').forEach(el => {
                 el.addEventListener('click', (e) => {
                     const a = el.dataset.act;
                     if (a === 'showHelp') { e.stopPropagation(); this._showInstallModal(); }
@@ -857,7 +859,9 @@
 
         _updateStatus() {
             this._q('dot').className = 'pdfsign-dot ' + (this.bridgeConnected ? 'on' : 'off');
-            this._q('status').textContent = this.bridgeConnected ? 'Đã kết nối' : 'Chưa kết nối hSignerBridge';
+            this._q('status').textContent = this.bridgeConnected ? 'Đã kết nối' : 'Chưa kết nối — bấm để xem hướng dẫn';
+            const bar = this._q('statusBar');
+            if (bar) bar.classList.toggle('disconnected', !this.bridgeConnected);
             this._updateSignBtn();
         }
 
@@ -925,8 +929,9 @@
                     <div class="step">
                         <div class="step-num">4</div>
                         <div class="step-body">
-                            <b>Chấp nhận chứng thư SSL tự ký</b> lần đầu:
-                            mở <a href="${httpsUrl}" target="_blank">${httpsUrl}</a> → bấm "Advanced" → "Proceed".
+                            <b>Chấp nhận chứng thư SSL tự ký</b> trên trình duyệt này (quan trọng với Firefox):<br>
+                            <button onclick="window.open('${httpsUrl}', '_blank')" style="margin-top:8px; padding:8px 14px; background:${this.colors.primary}; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:600; font-size:13px;">🔓 Mở ${httpsUrl}</button>
+                            <div class="hint-warn">Trang sẽ báo "Your connection is not secure" — bấm <b>Advanced</b> → <b>Accept the Risk and Continue</b> (Firefox) / <b>Proceed</b> (Chrome).</div>
                         </div>
                     </div>
                     <div class="step">

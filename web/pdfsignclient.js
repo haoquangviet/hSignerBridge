@@ -813,8 +813,23 @@
             btn.disabled = !this.pdfDoc || !this.sigPlaced || !this.bridgeConnected;
         }
 
+        // ==================== Destroy ====================
+        /** Dọn dẹp client: đóng WS, clear timers, xóa DOM. Gọi trước khi bỏ instance. */
+        destroy() {
+            this._destroyed = true;
+            if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+            if (this._connectTimeoutId) { clearTimeout(this._connectTimeoutId); this._connectTimeoutId = null; }
+            if (this._ws) {
+                try { this._ws.onclose = null; this._ws.onerror = null; this._ws.onmessage = null; this._ws.close(); } catch {}
+                this._ws = null;
+            }
+            this._hideInstallModal();
+            try { this.root.innerHTML = ''; } catch {}
+        }
+
         // ==================== Bridge ====================
         _connectBridge() {
+            if (this._destroyed) return;
             // Đã có connection đang open hoặc đang connect → không tạo mới
             if (this._ws && (this._ws.readyState === WebSocket.OPEN || this._ws.readyState === WebSocket.CONNECTING)) return;
             if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
@@ -835,6 +850,7 @@
             // Firefox: nếu cert tự ký chưa accept, WSS hang không fire onerror
             // → timeout chủ động, coi như fail và fallback/show modal
             this._connectTimeoutId = setTimeout(() => {
+                if (this._destroyed) return;
                 if (ws.readyState !== WebSocket.OPEN) {
                     try { ws.close(); } catch {}
                     this._handleWsError(url);
@@ -866,10 +882,14 @@
                 }
             };
             ws.onclose = () => {
+                if (this._destroyed) return;
                 if (this._connectTimeoutId) { clearTimeout(this._connectTimeoutId); this._connectTimeoutId = null; }
                 this.bridgeConnected = false; this._updateStatus();
                 if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
-                this._reconnectTimer = setTimeout(() => { this._reconnectTimer = null; this._connectBridge(); }, 3000);
+                this._reconnectTimer = setTimeout(() => {
+                    this._reconnectTimer = null;
+                    if (!this._destroyed) this._connectBridge();
+                }, 3000);
             };
         }
 

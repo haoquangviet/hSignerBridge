@@ -55,13 +55,20 @@
         colors: null,                               // null = DEFAULT_COLORS; object để override từng khoá
         sidePanelWidth: 340,                        // px — rộng side panel
         maxWidth: null,                             // null = full container; hoặc số px để giới hạn
+        zIndex: 'auto',                             // z-index của root container (dùng khi plugin đặt cạnh các layer khác)
+        modalZIndex: 10000,                         // z-index của modal (cert picker, install guide) — phải > zIndex
     };
 
+    // Phụ thuộc runtime (tự load từ CDN lần đầu, cache sau đó):
+    //  • pdf.js 3.11      — render PDF (core rendering)
+    //  • pdf-lib 1.17     — chỉnh sửa PDF (thêm signature field + placeholder)
+    //  • perfect-freehand — làm mượt chữ ký vẽ tay (ESM từ esm.sh)
+    //  • Caveat font      — font chữ ký khi gõ
+    // Không dùng: node-forge, jQuery, React... Plugin dùng DOM/Canvas API thuần.
     const CDN = {
         pdfjs: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
         pdfjsWorker: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
         pdfLib: 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js',
-        forge: 'https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js',
         perfectFreehand: 'https://esm.sh/perfect-freehand@1.2.2',
         caveatFont: 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap',
     };
@@ -159,7 +166,7 @@
 .pdfsign-install-modal .pdfsign-modal-actions .cancel { background: #f3f4f6 !important; color: #374151 !important; }
 
 /* Cert picker modal */
-.pdfsign-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.pdfsign-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: var(--pdfsign-modal-z, 10000); }
 .pdfsign-modal { background: var(--pdfsign-sidebar); border-radius: 8px; padding: 20px; width: 760px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
 .pdfsign-modal h2 { color: var(--pdfsign-primary); font-size: 16px; margin: 0 0 14px; }
 .pdfsign-cert-list { flex: 1; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: 4px; max-height: 50vh; }
@@ -289,6 +296,9 @@
             // Kích thước tuỳ biến
             el.style.setProperty('--pdfsign-side-w', `${this.cfg.sidePanelWidth}px`);
             if (this.cfg.maxWidth) el.style.setProperty('--pdfsign-maxwidth', `${this.cfg.maxWidth}px`);
+            // Z-index: áp lên root div; modal dùng --pdfsign-modal-z
+            if (this.cfg.zIndex !== 'auto') el.style.zIndex = String(this.cfg.zIndex);
+            el.style.setProperty('--pdfsign-modal-z', String(this.cfg.modalZIndex));
             el.style.setProperty('--pdfsign-primary', c.primary);
             el.style.setProperty('--pdfsign-secondary', c.secondary);
             el.style.setProperty('--pdfsign-success', c.success);
@@ -309,7 +319,6 @@
             await Promise.all([
                 loadScript(CDN.pdfjs),
                 loadScript(CDN.pdfLib),
-                loadScript(CDN.forge),
                 this._loadPerfectFreehand(),
             ]);
             window.pdfjsLib.GlobalWorkerOptions.workerSrc = CDN.pdfjsWorker;
@@ -856,6 +865,7 @@
             if (this._installModal) return;
             const bg = document.createElement('div');
             bg.className = 'pdfsign-modal-bg';
+            bg.style.zIndex = String(this.cfg.modalZIndex);
             // Set CSS vars trên bg để các var() trong modal CSS hoạt động
             // (modal được append vào document.body, ngoài .pdfsign-root cascade)
             const c = this.colors;
@@ -985,6 +995,7 @@
             return new Promise((resolve) => {
                 const bg = document.createElement('div');
                 bg.className = 'pdfsign-modal-bg';
+                bg.style.zIndex = String(this.cfg.modalZIndex);
                 // Set CSS vars trên bg (cert picker cũng append vào body)
                 const cc = this.colors;
                 bg.style.setProperty('--pdfsign-primary', cc.primary);

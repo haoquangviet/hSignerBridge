@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hSignerBridge - Demo ký số PDF</title>
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; }
+        #pdfsign { width: 100%; height: 100vh; }
+    </style>
+</head>
+<body>
+
+<div id="pdfsign"></div>
+
+<script src="pdfsignclient.js"></script>
+<script>
+    // Ví dụ 1: Cho người dùng tự mở file PDF (mặc định dùng màu thương hiệu hAutoSigner)
+    new PdfSignClient({
+        container: '#pdfsign',
+        bridgeUrl: 'wss://localhost:9505',
+        allowFileOpen: true,
+        onSigned: (blob, filename, bytes) => {
+            console.log('Signed PDF:', filename, 'size:', bytes.length);
+        },
+        onError: (err) => {
+            console.error('Sign error:', err);
+        },
+        // Tuỳ biến màu (optional) — chỉ override khoá cần đổi, còn lại dùng default:
+        // colors: {
+        //     primary: '#10B981',     // xanh lá thay vì cam
+        //     secondary: '#1F2937',   // xám đậm thay vì xanh dương
+        //     success: '#22C55E',
+        //     danger: '#EF4444',
+        //     bg: '#0F172A',
+        //     sidebar: '#1E293B',
+        //     pdfPanel: '#334155',
+        //     text: '#F1F5F9',
+        //     textMuted: '#94A3B8',
+        // },
+    });
+
+    // Ví dụ 2: Truyền PDF sẵn qua base64 (không cho mở file)
+    // new PdfSignClient({
+    //     container: '#pdfsign',
+    //     allowFileOpen: false,
+    //     pdfBase64: 'JVBERi0xLjQK...',
+    //     filename: 'hop-dong.pdf',
+    //     autoDownload: false,
+    //     onSigned: (blob, filename, bytes) => {
+    //         // Upload ngược lên server
+    //         const fd = new FormData();
+    //         fd.append('file', blob, filename);
+    //         fetch('/api/upload-signed', { method: 'POST', body: fd });
+    //     },
+    // });
+</script>
+
+</body>
+</html>

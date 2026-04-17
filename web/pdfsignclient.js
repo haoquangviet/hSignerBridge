@@ -38,18 +38,23 @@
 
     const DEFAULTS = {
         container: null,
+        title: 'hSignerBridge',                     // tiêu đề hiển thị trên header
         bridgeUrl: 'wss://localhost:9505',
         bridgeUrlFallback: 'ws://localhost:9506',
-        bridgeDownloadUrl: './hSignerBridge.exe',  // Link download exe khi bridge không chạy
-        bridgeHttpsUrl: 'https://localhost:9505',  // Để accept cert tự ký lần đầu
+        bridgeDownloadUrl: 'https://github.com/haoquangviet/hSignerBridge/releases/latest/download/hSignerBridge.exe',
+        bridgeHttpsUrl: 'https://localhost:9505',
+        connectTimeout: 5000,                       // ms — hiện modal install nếu không kết nối được trong thời gian này
         allowFileOpen: true,
         pdfBase64: null,
         pdfBytes: null,
         filename: 'document.pdf',
         onSigned: null,
         onError: null,
+        onClose: null,                              // callback khi bấm nút đóng (null = không hiện nút)
         autoDownload: true,
-        colors: null, // null = dùng DEFAULT_COLORS; object để override từng khoá
+        colors: null,                               // null = DEFAULT_COLORS; object để override từng khoá
+        sidePanelWidth: 340,                        // px — rộng side panel
+        maxWidth: null,                             // null = full container; hoặc số px để giới hạn
     };
 
     const CDN = {
@@ -62,9 +67,11 @@
     };
 
     const CSS = `
-.pdfsign-root { font-family: 'Segoe UI', Arial, sans-serif; background: var(--pdfsign-bg); color: var(--pdfsign-text); display: flex; flex-direction: column; height: 100%; width: 100%; }
-.pdfsign-header { background: linear-gradient(135deg, var(--pdfsign-secondary), #1a5298); padding: 0 20px; display: flex; align-items: center; height: 48px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-.pdfsign-brand { color: #fff; font-size: 16px; font-weight: bold; }
+.pdfsign-root { font-family: 'Segoe UI', Arial, sans-serif; background: var(--pdfsign-bg); color: var(--pdfsign-text); display: flex; flex-direction: column; height: 100%; width: 100%; max-width: var(--pdfsign-maxwidth, 100%); margin: 0 auto; overflow: hidden; }
+.pdfsign-header { background: linear-gradient(135deg, var(--pdfsign-secondary), #1a5298); padding: 0 14px 0 20px; display: flex; align-items: center; height: 48px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+.pdfsign-brand { color: #fff; font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdfsign-close-btn { background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); width: 32px; height: 32px; border-radius: 4px; cursor: pointer; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; margin-left: 10px; padding: 0; }
+.pdfsign-close-btn:hover { background: var(--pdfsign-danger); border-color: var(--pdfsign-danger); }
 .pdfsign-spacer { flex: 1; }
 .pdfsign-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255,255,255,0.85); }
 .pdfsign-dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -73,7 +80,11 @@
 
 .pdfsign-main { display: flex; flex: 1; min-height: 0; }
 .pdfsign-pdf-panel { flex: 1; display: flex; flex-direction: column; background: var(--pdfsign-pdfPanel); min-width: 0; }
-.pdfsign-side { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--pdfsign-sidebar); border-left: 1px solid var(--pdfsign-secondary); overflow-y: auto; }
+.pdfsign-side { width: var(--pdfsign-side-w, 340px); flex-shrink: 0; display: flex; flex-direction: column; background: var(--pdfsign-sidebar); border-left: 1px solid var(--pdfsign-secondary); overflow-y: auto; }
+@media (max-width: 720px) {
+  .pdfsign-main { flex-direction: column; }
+  .pdfsign-side { width: 100%; max-height: 50vh; border-left: none; border-top: 1px solid var(--pdfsign-secondary); }
+}
 
 .pdfsign-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--pdfsign-secondary); font-size: 13px; flex-shrink: 0; }
 .pdfsign-toolbar button { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 13px; }
@@ -275,6 +286,9 @@
             const c = this.colors;
             const el = this.root.querySelector('.pdfsign-root');
             if (!el) return;
+            // Kích thước tuỳ biến
+            el.style.setProperty('--pdfsign-side-w', `${this.cfg.sidePanelWidth}px`);
+            if (this.cfg.maxWidth) el.style.setProperty('--pdfsign-maxwidth', `${this.cfg.maxWidth}px`);
             el.style.setProperty('--pdfsign-primary', c.primary);
             el.style.setProperty('--pdfsign-secondary', c.secondary);
             el.style.setProperty('--pdfsign-success', c.success);
@@ -324,15 +338,19 @@
             const inkBlue = '#0033A0';   // xanh bút bi (Parker/Bic/Pilot)
             const inkRed = '#B91C1C';    // đỏ mực
             const cBlue = inkBlue, cRed = inkRed;
+            const closeBtn = (typeof this.cfg.onClose === 'function')
+                ? `<button class="pdfsign-close-btn" data-act="close" title="Đóng (quay lại)">×</button>` : '';
+            const title = this.cfg.title || 'hSignerBridge';
             this.root.innerHTML = `
 <div class="pdfsign-root">
   <div class="pdfsign-header">
-    <span class="pdfsign-brand">hSignerBridge</span>
+    <span class="pdfsign-brand">${title}</span>
     <div class="pdfsign-spacer"></div>
     <div class="pdfsign-status">
       <div class="pdfsign-dot off" data-role="dot"></div>
       <span data-role="status">Đang kết nối...</span>
     </div>
+    ${closeBtn}
   </div>
   <div class="pdfsign-main">
     <div class="pdfsign-pdf-panel">
@@ -435,6 +453,7 @@
                 else if (a === 'clearSig') this._clearSigCanvas();
                 else if (a === 'triggerUpload') this._q('sigUpload').click();
                 else if (a === 'showHelp') this._showInstallModal();
+                else if (a === 'close') { if (typeof this.cfg.onClose === 'function') this.cfg.onClose(); }
             });
             r.addEventListener('change', (e) => {
                 if (e.target.dataset.role === 'file' && e.target.files[0]) this._loadPdfFile(e.target.files[0]);
@@ -448,6 +467,14 @@
             });
             r.querySelectorAll('[data-color]').forEach(dot => {
                 dot.addEventListener('click', () => this._setColor(dot.dataset.color, dot));
+            });
+            // Direct bindings cho các nút quan trọng (safeguard cho Firefox event delegation)
+            r.querySelectorAll('[data-act]').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    const a = el.dataset.act;
+                    if (a === 'showHelp') { e.stopPropagation(); this._showInstallModal(); }
+                    else if (a === 'close') { e.stopPropagation(); if (typeof this.cfg.onClose === 'function') this.cfg.onClose(); }
+                });
             });
             this._bindSigPad();
             this._bindOverlay();
@@ -760,26 +787,28 @@
         _openWs(url) {
             // Đóng socket cũ nếu còn
             if (this._ws) { try { this._ws.onclose = null; this._ws.close(); } catch {} this._ws = null; }
+            if (this._connectTimeoutId) { clearTimeout(this._connectTimeoutId); this._connectTimeoutId = null; }
 
             const ws = new WebSocket(url);
             this._ws = ws;
+
+            // Firefox: nếu cert tự ký chưa accept, WSS hang không fire onerror
+            // → timeout chủ động, coi như fail và fallback/show modal
+            this._connectTimeoutId = setTimeout(() => {
+                if (ws.readyState !== WebSocket.OPEN) {
+                    try { ws.close(); } catch {}
+                    this._handleWsError(url);
+                }
+            }, this.cfg.connectTimeout);
+
             ws.onopen = () => {
+                if (this._connectTimeoutId) { clearTimeout(this._connectTimeoutId); this._connectTimeoutId = null; }
                 this.bridgeConnected = true;
                 this._failCount = 0;
                 this._hideInstallModal();
                 this._updateStatus();
             };
-            ws.onerror = () => {
-                if (!this._triedFallback && url.startsWith('wss://')) {
-                    this._triedFallback = true;
-                    this._openWs(this.cfg.bridgeUrlFallback);
-                } else {
-                    this.bridgeConnected = false; this._updateStatus();
-                    this._failCount++;
-                    // Sau 2 lần fail → hiện modal hướng dẫn cài đặt
-                    if (this._failCount >= 2) this._showInstallModal();
-                }
-            };
+            ws.onerror = () => this._handleWsError(url);
             ws.onmessage = (e) => {
                 const msg = JSON.parse(e.data);
                 if (msg.action === 'sign-result' || msg.action === 'sign-cms-result') {
@@ -797,10 +826,24 @@
                 }
             };
             ws.onclose = () => {
+                if (this._connectTimeoutId) { clearTimeout(this._connectTimeoutId); this._connectTimeoutId = null; }
                 this.bridgeConnected = false; this._updateStatus();
                 if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
                 this._reconnectTimer = setTimeout(() => { this._reconnectTimer = null; this._connectBridge(); }, 3000);
             };
+        }
+
+        _handleWsError(url) {
+            if (this._connectTimeoutId) { clearTimeout(this._connectTimeoutId); this._connectTimeoutId = null; }
+            if (!this._triedFallback && url && url.startsWith('wss://')) {
+                this._triedFallback = true;
+                this._openWs(this.cfg.bridgeUrlFallback);
+            } else {
+                this.bridgeConnected = false; this._updateStatus();
+                this._failCount = (this._failCount || 0) + 1;
+                // Fail lần đầu → show modal luôn (Firefox/WSS cert issue)
+                if (this._failCount >= 1) this._showInstallModal();
+            }
         }
 
         _updateStatus() {

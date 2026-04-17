@@ -20,6 +20,17 @@
         container: '#pdfsign',
         bridgeUrl: 'wss://localhost:9505',
         allowFileOpen: true,
+
+        // Tuỳ biến text (optional — bất kỳ khoá nào trong DEFAULT_LABELS)
+        // labels: {
+        //     signTitle: 'Ký & lưu',
+        //     signBtn: 'Ký và lưu',
+        //     signHint: 'Vui lòng cắm USB Token và bấm nút để ký tài liệu.',
+        //     placeSigBtn: 'Chèn chữ ký',
+        //     createSigTitle: 'Tạo chữ ký',
+        //     helpBtn: 'Trợ giúp cài đặt',
+        // },
+
         onSigned: (blob, filename, bytes, base64) => {
             console.log('Signed PDF:', filename, 'size:', bytes.length);
             // Có đủ 4 format để sử dụng:

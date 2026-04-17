@@ -36,9 +36,36 @@
         textMuted: '#8aa0c0',    // Muted text (meta info)
     };
 
+    const DEFAULT_LABELS = {
+        connecting: 'Đang kết nối...',
+        connected: 'Đã kết nối',
+        disconnected: 'Chưa kết nối — bấm để xem hướng dẫn',
+        openBtn: 'Mở PDF',
+        pagesSuffix: 'trang',
+        placeholderMain: 'Chọn file PDF để bắt đầu ký số',
+        placeholderSub: 'Hỗ trợ ký số trực tiếp từ trình duyệt qua USB Token',
+        createSigTitle: 'Tạo chữ ký',
+        tabDraw: 'Vẽ',
+        tabType: 'Gõ',
+        tabUpload: 'Tải ảnh',
+        clearBtn: 'Xóa',
+        typePlaceholder: 'Nhập tên...',
+        uploadText: 'Chọn ảnh chữ ký (PNG/JPG)',
+        placeSigBtn: 'Đặt chữ ký lên PDF',
+        signTitle: 'Ký số',
+        signHint: 'Khi nhấn "Ký số", Windows sẽ hiện hộp thoại chọn chứng thư số và nhập PIN cho USB Token.',
+        signBtn: 'Ký số & Tải về',
+        signingDefault: 'Đang ký số...',
+        helpBtn: 'Hướng dẫn cài đặt hSignerBridge',
+        certPickerTitle: 'Chọn chứng thư số',
+        certPickerOk: 'Ký số',
+        certPickerCancel: 'Huỷ',
+    };
+
     const DEFAULTS = {
         container: null,
         title: 'hSignerBridge',                     // tiêu đề hiển thị trên header
+        labels: null,                               // object override DEFAULT_LABELS
         bridgeUrl: 'wss://localhost:9505',
         bridgeUrlFallback: 'ws://localhost:9506',
         bridgeDownloadUrl: 'https://github.com/haoquangviet/hSignerBridge/releases/latest/download/hSignerBridge.exe',
@@ -261,6 +288,7 @@
         constructor(opts) {
             this.cfg = Object.assign({}, DEFAULTS, opts || {});
             this.colors = Object.assign({}, DEFAULT_COLORS, this.cfg.colors || {});
+            this.labels = Object.assign({}, DEFAULT_LABELS, this.cfg.labels || {});
             const root = typeof this.cfg.container === 'string'
                 ? document.querySelector(this.cfg.container) : this.cfg.container;
             if (!root) throw new Error('PdfSignClient: container not found');
@@ -343,7 +371,7 @@
 
         _renderLayout() {
             const openBtn = this.cfg.allowFileOpen
-                ? `<button data-act="open">Mở PDF</button><input type="file" data-role="file" accept=".pdf" style="display:none">
+                ? `<button data-act="open">${this.labels.openBtn}</button><input type="file" data-role="file" accept=".pdf" style="display:none">
                    <div class="sep"></div>` : '';
             // Màu mực viết chữ ký (cố định, khác với màu thương hiệu của theme)
             const inkBlue = '#0033A0';   // xanh bút bi (Parker/Bic/Pilot)
@@ -352,6 +380,7 @@
             const closeBtn = (typeof this.cfg.onClose === 'function')
                 ? `<button class="pdfsign-close-btn" data-act="close" title="Đóng (quay lại)">×</button>` : '';
             const title = this.cfg.title || 'hSignerBridge';
+            const L = this.labels;
             this.root.innerHTML = `
 <div class="pdfsign-root">
   <div class="pdfsign-header">
@@ -359,7 +388,7 @@
     <div class="pdfsign-spacer"></div>
     <div class="pdfsign-status" data-role="statusBar" data-act="showHelp" title="Bấm để xem hướng dẫn cài đặt hSignerBridge">
       <div class="pdfsign-dot off" data-role="dot"></div>
-      <span data-role="status">Đang kết nối...</span>
+      <span data-role="status">${L.connecting}</span>
     </div>
     ${closeBtn}
   </div>
@@ -367,7 +396,7 @@
     <div class="pdfsign-pdf-panel">
       <div class="pdfsign-toolbar">
         ${openBtn}
-        <span><span data-role="totalPages">0</span> trang</span>
+        <span><span data-role="totalPages">0</span> ${L.pagesSuffix}</span>
         <div class="sep"></div>
         <button data-act="zoomOut">-</button>
         <span data-role="zoom">100%</span>
@@ -386,18 +415,18 @@
         </div>
         <div class="pdfsign-placeholder" data-role="placeholder">
           <div class="icon">📄</div>
-          <p>Chọn file PDF để bắt đầu ký số</p>
-          <p style="margin-top:8px;font-size:12px;color:#444;">Ký số trực tiếp từ trình duyệt qua USB Token</p>
+          <p>${L.placeholderMain}</p>
+          <p style="margin-top:8px;font-size:12px;color:#444;">${L.placeholderSub}</p>
         </div>
       </div>
     </div>
     <div class="pdfsign-side">
       <div class="pdfsign-section">
-        <h3>Tạo chữ ký</h3>
+        <h3>${L.createSigTitle}</h3>
         <div class="pdfsign-tabs">
-          <button class="active" data-tab="draw">Vẽ</button>
-          <button data-tab="type">Gõ</button>
-          <button data-tab="upload">Tải ảnh</button>
+          <button class="active" data-tab="draw">${L.tabDraw}</button>
+          <button data-tab="type">${L.tabType}</button>
+          <button data-tab="upload">${L.tabUpload}</button>
         </div>
         <div data-pane="draw">
           <canvas class="pdfsign-sig-canvas" data-role="sigCanvas" width="600" height="400"></canvas>
@@ -405,11 +434,11 @@
             <div class="pdfsign-color active" style="background:#000" data-color="#000000"></div>
             <div class="pdfsign-color" style="background:${cBlue}" data-color="${cBlue}"></div>
             <div class="pdfsign-color" style="background:${cRed}" data-color="${cRed}"></div>
-            <button class="pdfsign-clear" data-act="clearSig">Xóa</button>
+            <button class="pdfsign-clear" data-act="clearSig">${L.clearBtn}</button>
           </div>
         </div>
         <div data-pane="type" style="display:none">
-          <input type="text" class="pdfsign-type-input" data-role="typeInput" placeholder="Nhập tên...">
+          <input type="text" class="pdfsign-type-input" data-role="typeInput" placeholder="${L.typePlaceholder}">
           <div class="pdfsign-type-preview" data-role="typePreview"></div>
           <div class="pdfsign-colors" style="margin-top:6px">
             <div class="pdfsign-color active" style="background:#000" data-color="#000000"></div>
@@ -419,26 +448,26 @@
         </div>
         <div data-pane="upload" style="display:none">
           <div class="pdfsign-upload" data-act="triggerUpload">
-            Chọn ảnh chữ ký (PNG/JPG)
+            ${L.uploadText}
             <input type="file" data-role="sigUpload" accept="image/*" style="display:none">
           </div>
           <div data-role="uploadPreview" style="margin-top:6px;text-align:center"></div>
         </div>
-        <button class="pdfsign-btn pdfsign-btn-place" data-act="placeSig">Đặt chữ ký lên PDF</button>
+        <button class="pdfsign-btn pdfsign-btn-place" data-act="placeSig">${L.placeSigBtn}</button>
       </div>
       <div class="pdfsign-section">
-        <h3>Ký số</h3>
-        <p class="hint">Khi nhấn "Ký số", Windows sẽ hiện hộp thoại chọn chứng thư số và nhập PIN cho USB Token.</p>
-        <button class="pdfsign-btn pdfsign-btn-sign" data-act="sign" disabled>Ký số &amp; Tải về</button>
+        <h3>${L.signTitle}</h3>
+        <p class="hint">${L.signHint}</p>
+        <button class="pdfsign-btn pdfsign-btn-sign" data-act="sign" disabled>${L.signBtn}</button>
         <div class="pdfsign-progress" data-role="progress">
           <div class="pdfsign-spinner"></div>
-          <div data-role="progressText">Đang ký số...</div>
+          <div data-role="progressText">${L.signingDefault}</div>
         </div>
       </div>
       <div class="pdfsign-footer">
         <button class="pdfsign-help-btn" data-act="showHelp">
           <span class="icon">?</span>
-          Hướng dẫn cài đặt hSignerBridge
+          ${L.helpBtn}
         </button>
       </div>
     </div>
@@ -859,7 +888,7 @@
 
         _updateStatus() {
             this._q('dot').className = 'pdfsign-dot ' + (this.bridgeConnected ? 'on' : 'off');
-            this._q('status').textContent = this.bridgeConnected ? 'Đã kết nối' : 'Chưa kết nối — bấm để xem hướng dẫn';
+            this._q('status').textContent = this.bridgeConnected ? this.labels.connected : this.labels.disconnected;
             const bar = this._q('statusBar');
             if (bar) bar.classList.toggle('disconnected', !this.bridgeConnected);
             this._updateSignBtn();
@@ -1012,12 +1041,13 @@
                 bg.style.setProperty('--pdfsign-primary-bg-strong', hexToRgba(cc.primary, 0.18));
                 const modal = document.createElement('div');
                 modal.className = 'pdfsign-modal';
+                const L = this.labels;
                 modal.innerHTML = `
-                    <h2>Chọn chứng thư số</h2>
+                    <h2>${L.certPickerTitle}</h2>
                     <div class="pdfsign-cert-list"></div>
                     <div class="pdfsign-modal-actions">
-                        <button class="cancel">Huỷ</button>
-                        <button class="ok" disabled>Ký số</button>
+                        <button class="cancel">${L.certPickerCancel}</button>
+                        <button class="ok" disabled>${L.certPickerOk}</button>
                     </div>`;
                 bg.appendChild(modal);
                 document.body.appendChild(bg);

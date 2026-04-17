@@ -136,15 +136,20 @@ Adobe Reader / Foxit verify được chữ ký là **VALID**, hiển thị tên 
 - **Máy người ký**: Windows 10/11 x64 + .NET 8 Desktop Runtime + USB Token
 - **Trình duyệt**: Chrome 90+ / Edge 90+ / Firefox 95+ (hỗ trợ WebSocket, WebCrypto, File API, `getCoalescedEvents`, dynamic `import()`)
 
-## Build từ source
+## Build từ source (optional)
+
+File [`web/pdfsignclient.js`](./web/pdfsignclient.js) trong repo đã embed sẵn `hSignerBridge.exe` dưới dạng base64 — **sẵn sàng dùng ngay**, không cần build lại.
+
+Chỉ build từ source nếu bạn sửa C# source hoặc muốn replace exe bằng bản tự ký:
 
 ```bash
-dotnet publish hSignerBridge/hSignerBridge.csproj -c Release -r win-x64 \
+# 1. Build exe (Windows, yêu cầu .NET 8 SDK)
+dotnet publish src/hSignerBridge.csproj -c Release -r win-x64 \
     --self-contained false -p:PublishSingleFile=true -o publish-bridge
 
-# Inject base64 exe vào plugin
-cd hSignerBridge/web
-python build.py
+# 2. Re-inject exe mới vào plugin
+cp publish-bridge/hSignerBridge.exe web/
+python web/build.py
 ```
 
 ## License & Support

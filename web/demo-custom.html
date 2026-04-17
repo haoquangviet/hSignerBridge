@@ -54,8 +54,8 @@
             title: '✨ PDF Signer Pro',
             bridgeUrl: 'wss://localhost:9505',
             allowFileOpen: true,
-            maxWidth: null,                             // full width
-            sidePanelWidth: 380,                        // side panel rộng hơn
+            maxWidth: 800,                             // full width
+            sidePanelWidth: 300,                        // side panel rộng hơn
             modalZIndex: 99999,
             colors: {
                 primary: '#10B981',     // xanh lá emerald
@@ -137,6 +137,9 @@
     function apply(presetKey) {
         document.querySelectorAll('.preset button').forEach(b => b.classList.remove('active'));
         document.getElementById('btn' + presetKey[0].toUpperCase() + presetKey.slice(1)).classList.add('active');
+
+        // QUAN TRỌNG: destroy() client cũ để đóng WS, clear timers, tránh leak
+        if (client && typeof client.destroy === 'function') client.destroy();
 
         const cfg = Object.assign({ container: '#pdfsign' }, presets[presetKey]);
         containerEl.innerHTML = '';

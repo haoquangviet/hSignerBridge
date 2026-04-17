@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PdfSignClient — Demo tuỳ biến</title>
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background: #f4f4f8; }
+        .page-header { background: #2d2d44; color: #fff; padding: 12px 20px; font-size: 14px; display: flex; align-items: center; gap: 16px; }
+        .page-header h1 { margin: 0; font-size: 16px; }
+        .page-header .preset { display: flex; gap: 8px; }
+        .page-header button { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .page-header button.active { background: #10B981; border-color: #10B981; }
+        .container {
+            margin: 20px auto;
+            height: calc(100vh - 110px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+            transition: max-width 0.25s;
+        }
+        .log { position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.85); color: #0f0; font-family: 'Consolas', monospace; font-size: 11px; padding: 10px 14px; border-radius: 6px; max-width: 400px; max-height: 200px; overflow-y: auto; z-index: 5; display: none; }
+        .log.visible { display: block; }
+    </style>
+</head>
+<body>
+
+<div class="page-header">
+    <h1>🎨 PdfSignClient Demo tuỳ biến</h1>
+    <div class="preset">
+        <button id="btnGreen" class="active">Theme Xanh lá + "Ký và lưu"</button>
+        <button id="btnPurple">Theme Tím + compact 900px</button>
+        <button id="btnOriginal">Mặc định (hAutoSigner)</button>
+    </div>
+</div>
+
+<div id="pdfsign" class="container" style="max-width: 100%;"></div>
+
+<div id="log" class="log">Chưa có sự kiện.</div>
+
+<script src="pdfsignclient.js"></script>
+<script>
+    const logEl = document.getElementById('log');
+    function logMsg(msg) {
+        logEl.classList.add('visible');
+        const time = new Date().toLocaleTimeString();
+        logEl.innerHTML = `[${time}] ${msg}<br>` + logEl.innerHTML;
+    }
+
+    // ============ 3 PRESET TUỲ BIẾN ============
+    const presets = {
+        green: {
+            title: '✨ PDF Signer Pro',
+            bridgeUrl: 'wss://localhost:9505',
+            allowFileOpen: true,
+            maxWidth: null,                             // full width
+            sidePanelWidth: 380,                        // side panel rộng hơn
+            modalZIndex: 99999,
+            colors: {
+                primary: '#10B981',     // xanh lá emerald
+                secondary: '#1F2937',   // xám đen
+                success: '#22C55E',
+                danger: '#EF4444',
+                bg: '#0F172A',
+                sidebar: '#1E293B',
+                pdfPanel: '#334155',
+                text: '#F1F5F9',
+                textMuted: '#94A3B8',
+            },
+            labels: {
+                signTitle: 'Ký & lưu',
+                signBtn: '💾 Ký và lưu',
+                signHint: 'Tài liệu sẽ được ký bằng USB Token và tự động tải về máy.',
+                placeSigBtn: '✏️ Chèn chữ ký vào PDF',
+                createSigTitle: 'Chữ ký điện tử',
+                tabDraw: '✍️ Vẽ',
+                tabType: '⌨️ Gõ',
+                tabUpload: '📷 Tải ảnh',
+                helpBtn: '❓ Trợ giúp cài đặt',
+                placeholderMain: 'Chọn tài liệu PDF để bắt đầu',
+                openBtn: '📂 Mở tài liệu',
+            },
+            onClose: () => logMsg('▶ Người dùng bấm nút Đóng'),
+            onSigned: (blob, name, bytes, b64) => {
+                logMsg(`✅ Ký xong: ${name} (${(bytes.length/1024).toFixed(1)} KB, base64 = ${b64.length} chars)`);
+            },
+            onError: (err) => logMsg(`❌ Lỗi: ${err.message}`),
+        },
+
+        purple: {
+            title: 'Hợp đồng Điện tử',
+            bridgeUrl: 'wss://localhost:9505',
+            allowFileOpen: true,
+            maxWidth: 900,                              // giới hạn chiều rộng
+            sidePanelWidth: 300,                        // side panel hẹp
+            colors: {
+                primary: '#A855F7',     // tím violet
+                secondary: '#581C87',   // tím đậm
+                success: '#10B981',
+                danger: '#F43F5E',
+                bg: '#1E1B4B',
+                sidebar: '#312E81',
+                pdfPanel: '#3730A3',
+                text: '#E0E7FF',
+                textMuted: '#A5B4FC',
+            },
+            labels: {
+                signTitle: 'Ký hợp đồng',
+                signBtn: '📝 Ký và gửi',
+                signHint: 'Bạn sắp ký hợp đồng này. Vui lòng kiểm tra kỹ trước khi xác nhận.',
+                placeSigBtn: 'Đặt chữ ký vào ô trống',
+                helpBtn: 'Hỗ trợ',
+            },
+            onClose: () => logMsg('◀ Quay lại danh sách hợp đồng'),
+            onSigned: (blob, name, bytes, b64) => {
+                logMsg(`📤 Đã ký hợp đồng: ${name}, sẵn sàng gửi server (base64: ${b64.slice(0, 30)}...)`);
+            },
+            onError: (err) => logMsg(`⚠️ ${err.message}`),
+        },
+
+        original: {
+            // Không set gì → dùng toàn bộ default hAutoSigner
+            container: '#pdfsign',
+            bridgeUrl: 'wss://localhost:9505',
+            allowFileOpen: true,
+            onSigned: (blob, name, bytes, b64) => {
+                logMsg(`✅ Ký mặc định: ${name} (${bytes.length} bytes)`);
+            },
+        },
+    };
+
+    // ============ KHỞI TẠO + CHUYỂN THEME ============
+    let client = null;
+    const containerEl = document.getElementById('pdfsign');
+
+    function apply(presetKey) {
+        document.querySelectorAll('.preset button').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn' + presetKey[0].toUpperCase() + presetKey.slice(1)).classList.add('active');
+
+        const cfg = Object.assign({ container: '#pdfsign' }, presets[presetKey]);
+        containerEl.innerHTML = '';
+        containerEl.style.maxWidth = cfg.maxWidth ? cfg.maxWidth + 'px' : '100%';
+        client = new PdfSignClient(cfg);
+        logMsg(`🎨 Áp dụng preset: ${presetKey} (title: "${cfg.title || 'hSignerBridge'}", maxWidth: ${cfg.maxWidth || 'full'}, side: ${cfg.sidePanelWidth || 340}px)`);
+    }
+
+    document.getElementById('btnGreen').onclick = () => apply('green');
+    document.getElementById('btnPurple').onclick = () => apply('purple');
+    document.getElementById('btnOriginal').onclick = () => apply('original');
+
+    apply('green'); // default preset khi vào trang
+</script>
+
+</body>
+</html>

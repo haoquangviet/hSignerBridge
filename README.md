@@ -51,7 +51,7 @@ Vào trang web có tích hợp plugin ký số → trang sẽ tự động kết
 
 Chỉ cần 1 file `pdfsignclient.js` (đã embed `hSignerBridge.exe` base64 — user tải exe trực tiếp từ modal hướng dẫn trong plugin).
 
-Xem [`sample/demo.html`](./sample/demo.html) để biết thêm chi tiết.
+Xem [`web/demo.html`](./web/demo.html) để biết thêm chi tiết.
 
 ### Full config
 

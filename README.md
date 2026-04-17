@@ -57,34 +57,87 @@ Xem [`web/demo.html`](./web/demo.html) để biết thêm chi tiết.
 
 ```javascript
 new PdfSignClient({
-    container: '#pdfsign',                  // bắt buộc
+    // ========== BẮT BUỘC ==========
+    container: '#pdfsign',                  // selector hoặc HTMLElement
 
-    // Bridge
-    bridgeUrl: 'wss://localhost:9505',              // default
-    bridgeUrlFallback: 'ws://localhost:9506',
-    bridgeDownloadUrl: './hSignerBridge.exe',       // fallback nếu base64 không có
-    bridgeHttpsUrl: 'https://localhost:9505',       // để accept cert lần đầu
+    // ========== TIÊU ĐỀ & GIAO DIỆN ==========
+    title: 'hSignerBridge',                 // tiêu đề hiển thị trên header
 
-    // PDF nguồn — chọn 1
-    allowFileOpen: true,                    // cho user tự chọn PDF
-    pdfBase64: 'JVBERi0xL...',              // hoặc preload từ base64
-    pdfBytes: new Uint8Array(...),          // hoặc từ bytes
+    // ========== BRIDGE ==========
+    bridgeUrl: 'wss://localhost:9505',              // default WSS
+    bridgeUrlFallback: 'ws://localhost:9506',       // fallback nếu WSS fail
+    bridgeDownloadUrl:                              // link tải exe trong modal hướng dẫn
+        'https://github.com/haoquangviet/hSignerBridge/releases/latest/download/hSignerBridge.exe',
+    bridgeHttpsUrl: 'https://localhost:9505',       // URL để user accept cert tự ký (Firefox)
+    connectTimeout: 5000,                           // ms — hiện modal install nếu không kết nối trong thời gian này
 
-    // Output
+    // ========== PDF NGUỒN — chọn 1 ==========
+    allowFileOpen: true,                    // hiện nút "Mở PDF"
+    pdfBase64: 'JVBERi0xL...',              // hoặc preload base64
+    pdfBytes: new Uint8Array(...),          // hoặc Uint8Array
+
+    // ========== OUTPUT ==========
     filename: 'document.pdf',               // → 'signed_document.pdf'
     autoDownload: true,                     // tự tải về sau khi ký
 
-    // Callbacks
-    onSigned: (blob, filename, bytes) => { /* upload lên server */ },
+    // ========== CALLBACKS ==========
+    onSigned: (blob, filename, bytes, base64) => {
+        // blob    — Blob object (upload qua FormData)
+        // bytes   — Uint8Array raw
+        // base64  — chuỗi base64 (JSON / REST API / DB save)
+    },
     onError: (err) => { /* xử lý lỗi */ },
+    onClose: () => { /* nếu có → hiện nút ✕ ở header, gọi khi bấm */ },
 
-    // Tuỳ biến màu (optional)
-    colors: {
+    // ========== TUỲ BIẾN GIAO DIỆN ==========
+    colors: {                               // chỉ override khoá cần đổi, còn lại dùng default
         primary: '#FF791D',     secondary: '#174785',
         success: '#348D00',     danger: '#ED542C',
         bg: '#1a1a2e',          sidebar: '#16213e',
         pdfPanel: '#2a2a3e',    text: '#e0e0e0',
         textMuted: '#8aa0c0',
+    },
+    sidePanelWidth: 340,                    // px — rộng side panel công cụ
+    maxWidth: null,                         // null = full container; hoặc số px
+    zIndex: 'auto',                         // z-index root container
+    modalZIndex: 10000,                     // z-index modal (phải > zIndex)
+
+    // ========== TUỲ BIẾN TEXT (labels) ==========
+    labels: {                               // chỉ override khoá cần đổi
+        // Header & status
+        connecting: 'Đang kết nối...',
+        connected: 'Đã kết nối',
+        disconnected: 'Chưa kết nối — bấm để xem hướng dẫn',
+
+        // Toolbar PDF
+        openBtn: 'Mở PDF',
+        pagesSuffix: 'trang',
+        placeholderMain: 'Chọn file PDF để bắt đầu ký số',
+        placeholderSub: 'Hỗ trợ ký số trực tiếp từ trình duyệt qua USB Token',
+
+        // Tạo chữ ký
+        createSigTitle: 'Tạo chữ ký',
+        tabDraw: 'Vẽ',
+        tabType: 'Gõ',
+        tabUpload: 'Tải ảnh',
+        clearBtn: 'Xóa',
+        typePlaceholder: 'Nhập tên...',
+        uploadText: 'Chọn ảnh chữ ký (PNG/JPG)',
+        placeSigBtn: 'Đặt chữ ký lên PDF',
+
+        // Ký số
+        signTitle: 'Ký số',                 // ví dụ đổi thành 'Ký và lưu'
+        signHint: 'Khi nhấn "Ký số", Windows sẽ hiện hộp thoại chọn chứng thư số và nhập PIN cho USB Token.',
+        signBtn: 'Ký số & Tải về',          // ví dụ đổi thành 'Ký và lưu'
+        signingDefault: 'Đang ký số...',
+
+        // Modal chọn cert
+        certPickerTitle: 'Chọn chứng thư số',
+        certPickerOk: 'Ký số',
+        certPickerCancel: 'Huỷ',
+
+        // Footer
+        helpBtn: 'Hướng dẫn cài đặt hSignerBridge',
     },
 });
 ```

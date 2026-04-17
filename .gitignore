@@ -1,0 +1,12 @@
+bin/
+obj/
+publish/
+publish-bridge/
+*.user
+*.suo
+.vs/
+.vscode/
+*.log
+Thumbs.db
+.DS_Store
+__pycache__/

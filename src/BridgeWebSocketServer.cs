@@ -128,7 +128,11 @@ public class BridgeWebSocketServer
 
                 if (context.Request.IsWebSocketRequest)
                 {
-                    var wsContext = await context.AcceptWebSocketAsync(null);
+                    // Accept với keepalive 15s — phát hiện client chết nhanh, tránh WS rò rỉ
+                    var wsContext = await context.AcceptWebSocketAsync(
+                        subProtocol: null,
+                        receiveBufferSize: 16384,
+                        keepAliveInterval: TimeSpan.FromSeconds(15));
                     var clientId = Guid.NewGuid().ToString("N")[..8];
                     _clients.TryAdd(clientId, wsContext.WebSocket);
                     OnLog?.Invoke($"Client connected: {clientId}");
@@ -162,12 +166,28 @@ public class BridgeWebSocketServer
     private async Task HandleClient(string clientId, WebSocket ws, CancellationToken ct)
     {
         var buffer = new byte[64 * 1024]; // 64KB buffer
+        // Idle timeout: nếu 5 phút không có message, đóng kết nối
+        var idleTimeout = TimeSpan.FromMinutes(5);
 
         try
         {
             while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
-                var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), ct);
+                using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                idleCts.CancelAfter(idleTimeout);
+
+                WebSocketReceiveResult result;
+                try
+                {
+                    result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), idleCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Idle timeout — đóng client
+                    Log($"Client {clientId} idle 5m → đóng");
+                    try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "idle timeout", ct); } catch { }
+                    break;
+                }
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {

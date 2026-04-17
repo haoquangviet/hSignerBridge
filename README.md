@@ -152,4 +152,4 @@ python build.py
 © 2026 HQV Software — haoquangviet.com
 
 - Issues: https://github.com/HQVSoftware/hSignerBridge/issues
-- Email: quyet@haoquangviet.com
+- Email: hqv@haoquangviet.com

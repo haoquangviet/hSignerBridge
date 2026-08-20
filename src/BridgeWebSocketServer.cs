@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Net.WebSockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -23,7 +25,11 @@ namespace hSignerBridge;
 public class BridgeWebSocketServer
 {
     private readonly int _port;
-    private HttpListener? _listener;
+    // TLS is terminated in-process (TcpListener + SslStream) instead of HttpListener/http.sys:
+    // binding a certificate to http.sys needs "netsh http add sslcert", i.e. administrator rights, so for a
+    // normal user wss://localhost never came up and browsers fell back to ws:// — which Chrome now refuses
+    // (ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS) for a page served from a public site.
+    private readonly List<TcpListener> _listeners = new();
     private CancellationTokenSource? _cts;
     private readonly Form _mainForm; // để Invoke PIN dialog trên UI thread
     private readonly ConcurrentDictionary<string, WebSocket> _clients = new();
@@ -49,46 +55,42 @@ public class BridgeWebSocketServer
     {
         _cts = new CancellationTokenSource();
 
-        // Tạo SSL cert cho WSS
         try
         {
             _sslCert = SslCertificateManager.GetOrCreateLocalhostCert();
-            OnLog?.Invoke("SSL certificate ready for wss://localhost:" + _port);
+            Log("SSL certificate ready for wss://localhost:" + _port);
         }
         catch (Exception ex)
         {
-            OnLog?.Invoke($"Warning: SSL cert error: {ex.Message}. Using HTTP fallback.");
+            Log($"Warning: SSL cert error: {ex.Message}. WSS disabled, only ws:// will be available.");
         }
 
-        _listener = new HttpListener();
-        // Dùng HTTPS nếu có cert, fallback HTTP
-        var scheme = _sslCert != null ? "https" : "http";
-        _listener.Prefixes.Add($"{scheme}://localhost:{_port}/");
-        // Thêm HTTP prefix luôn (cho trường hợp test local)
-        if (_sslCert != null)
-            _listener.Prefixes.Add($"http://localhost:{_port + 1}/");
+        // wss://localhost:<port> (loopback only) + plain ws://localhost:<port+1> as a local fallback
+        if (_sslCert != null) StartListener(_port, secure: true);
+        StartListener(_port + 1, secure: false);
 
-        try
+        if (_listeners.Count == 0) Log("Server failed: no listener could be started");
+    }
+
+    private void StartListener(int port, bool secure)
+    {
+        foreach (var ip in new[] { IPAddress.Loopback, IPAddress.IPv6Loopback })
         {
-            _listener.Start();
-            OnLog?.Invoke($"Server started on {scheme}://localhost:{_port}");
-            Task.Run(() => AcceptLoop(_cts.Token));
-        }
-        catch (HttpListenerException ex)
-        {
-            OnLog?.Invoke($"Cannot start server: {ex.Message}");
-            // Fallback: thử HTTP only
+            TcpListener? l = null;
             try
             {
-                _listener = new HttpListener();
-                _listener.Prefixes.Add($"http://localhost:{_port}/");
-                _listener.Start();
-                OnLog?.Invoke($"Fallback: HTTP server on http://localhost:{_port}");
-                Task.Run(() => AcceptLoop(_cts.Token));
+                l = new TcpListener(ip, port);
+                l.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, true);
+                l.Start();
+                _listeners.Add(l);
+                Log($"Server started on {(secure ? "wss" : "ws")}://{(ip.Equals(IPAddress.Loopback) ? "localhost" : "[::1]")}:{port}");
+                var listener = l;
+                _ = Task.Run(() => AcceptLoop(listener, secure, _cts!.Token));
             }
-            catch (Exception ex2)
+            catch (Exception ex)
             {
-                OnLog?.Invoke($"Server failed: {ex2.Message}");
+                try { l?.Stop(); } catch { }
+                Log($"Cannot listen on {ip}:{port} — {ex.Message}");
             }
         }
     }
@@ -96,7 +98,8 @@ public class BridgeWebSocketServer
     public void Stop()
     {
         _cts?.Cancel();
-        try { _listener?.Stop(); } catch { }
+        foreach (var l in _listeners) { try { l.Stop(); } catch { } }
+        _listeners.Clear();
         foreach (var kv in _clients)
         {
             try { kv.Value.CloseAsync(WebSocketCloseStatus.NormalClosure, "Server shutdown",
@@ -106,61 +109,185 @@ public class BridgeWebSocketServer
         _clients.Clear();
     }
 
-    private async Task AcceptLoop(CancellationToken ct)
+    private async Task AcceptLoop(TcpListener listener, bool secure, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
-            try
-            {
-                var context = await _listener!.GetContextAsync();
-
-                // CORS headers
-                context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                context.Response.Headers.Add("Access-Control-Allow-Headers", "*");
-
-                if (context.Request.HttpMethod == "OPTIONS")
-                {
-                    context.Response.StatusCode = 204;
-                    context.Response.Close();
-                    continue;
-                }
-
-                if (context.Request.IsWebSocketRequest)
-                {
-                    // Accept với keepalive 15s — phát hiện client chết nhanh, tránh WS rò rỉ
-                    var wsContext = await context.AcceptWebSocketAsync(
-                        subProtocol: null,
-                        receiveBufferSize: 16384,
-                        keepAliveInterval: TimeSpan.FromSeconds(15));
-                    var clientId = Guid.NewGuid().ToString("N")[..8];
-                    _clients.TryAdd(clientId, wsContext.WebSocket);
-                    OnLog?.Invoke($"Client connected: {clientId}");
-                    _ = Task.Run(() => HandleClient(clientId, wsContext.WebSocket, ct));
-                }
-                else
-                {
-                    // HTTP status endpoint: GET / → JSON status
-                    await HandleHttpRequest(context);
-                }
-            }
+            TcpClient client;
+            try { client = await listener.AcceptTcpClientAsync(ct); }
+            catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
-            catch (HttpListenerException) when (ct.IsCancellationRequested) { break; }
-            catch (Exception ex)
-            {
-                OnLog?.Invoke($"Accept error: {ex.Message}");
-            }
+            catch (SocketException) { break; }
+            catch (Exception ex) { Log($"Accept error: {ex.Message}"); continue; }
+
+            _ = Task.Run(() => HandleConnection(client, secure, ct), ct);
         }
     }
 
-    private async Task HandleHttpRequest(HttpListenerContext context)
+    private async Task HandleConnection(TcpClient client, bool secure, CancellationToken ct)
     {
-        var json = JsonSerializer.Serialize(new WsPongResponse());
-        var bytes = Encoding.UTF8.GetBytes(json);
-        context.Response.ContentType = "application/json";
-        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-        await context.Response.OutputStream.WriteAsync(bytes);
-        context.Response.Close();
+        Stream stream = client.GetStream();
+        try
+        {
+            client.NoDelay = true;
+            if (secure)
+            {
+                var ssl = new SslStream(stream, leaveInnerStreamOpen: false);
+                using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                handshakeCts.CancelAfter(TimeSpan.FromSeconds(10));
+                await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = _sslCert,
+                    ClientCertificateRequired = false,
+                    EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                }, handshakeCts.Token);
+                stream = ssl;
+            }
+
+            var (requestLine, headers) = await ReadHttpHeadersAsync(stream, ct);
+            if (requestLine == null) { client.Close(); return; }
+
+            var method = requestLine.Split(' ')[0].ToUpperInvariant();
+            headers.TryGetValue("origin", out var origin);
+
+            // Chrome sends a Private Network Access preflight before letting a public page reach localhost.
+            if (method == "OPTIONS")
+            {
+                await WriteAsync(stream,
+                    "HTTP/1.1 204 No Content\r\n" + CorsHeaders(origin) +
+                    "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+                    "Access-Control-Allow-Headers: *\r\n" +
+                    "Access-Control-Max-Age: 600\r\n" +
+                    "Content-Length: 0\r\nConnection: close\r\n\r\n", ct);
+                client.Close();
+                return;
+            }
+
+            // Request/response channel. Chrome >= 141 refuses WebSockets from a public page to localhost
+            // (ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS) even after the user granted the permission, while
+            // fetch() is allowed — so the same commands are also served over a plain POST.
+            if (method == "POST")
+            {
+                string reply;
+                try
+                {
+                    var len = headers.TryGetValue("content-length", out var cl) && int.TryParse(cl, out var n) ? n : 0;
+                    if (len <= 0 || len > 32 * 1024 * 1024) throw new InvalidOperationException("Invalid Content-Length");
+                    var body = new byte[len];
+                    var read = 0;
+                    while (read < len)
+                    {
+                        var got = await stream.ReadAsync(body.AsMemory(read, len - read), ct);
+                        if (got <= 0) break;
+                        read += got;
+                    }
+                    reply = await Dispatch(Encoding.UTF8.GetString(body, 0, read));
+                }
+                catch (Exception ex)
+                {
+                    reply = JsonSerializer.Serialize(new WsSignResponse { Success = false, Error = ex.Message });
+                }
+                var replyBytes = Encoding.UTF8.GetBytes(reply);
+                await WriteAsync(stream,
+                    "HTTP/1.1 200 OK\r\n" + CorsHeaders(origin) +
+                    "Content-Type: application/json\r\n" +
+                    $"Content-Length: {replyBytes.Length}\r\nConnection: close\r\n\r\n", ct);
+                await stream.WriteAsync(replyBytes, ct);
+                await stream.FlushAsync(ct);
+                client.Close();
+                return;
+            }
+
+            var isUpgrade = headers.TryGetValue("upgrade", out var up) && up.Contains("websocket", StringComparison.OrdinalIgnoreCase);
+            if (!isUpgrade)
+            {
+                // Status endpoint: GET / → JSON (also used by the web plugin to detect the bridge)
+                var json = JsonSerializer.Serialize(new WsPongResponse());
+                var body = Encoding.UTF8.GetBytes(json);
+                await WriteAsync(stream,
+                    "HTTP/1.1 200 OK\r\n" + CorsHeaders(origin) +
+                    "Content-Type: application/json\r\n" +
+                    $"Content-Length: {body.Length}\r\nConnection: close\r\n\r\n", ct);
+                await stream.WriteAsync(body, ct);
+                await stream.FlushAsync(ct);
+                client.Close();
+                return;
+            }
+
+            if (!headers.TryGetValue("sec-websocket-key", out var key) || string.IsNullOrWhiteSpace(key))
+            {
+                await WriteAsync(stream, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n", ct);
+                client.Close();
+                return;
+            }
+
+            var accept = Convert.ToBase64String(SHA1.HashData(
+                Encoding.ASCII.GetBytes(key.Trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+            await WriteAsync(stream,
+                "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
+                $"Sec-WebSocket-Accept: {accept}\r\n" + CorsHeaders(origin) + "\r\n", ct);
+
+            var ws = WebSocket.CreateFromStream(stream, isServer: true, subProtocol: null,
+                keepAliveInterval: TimeSpan.FromSeconds(15));
+            var clientId = Guid.NewGuid().ToString("N")[..8];
+            _clients.TryAdd(clientId, ws);
+            Log($"Client connected: {clientId}{(secure ? " (wss)" : " (ws)")}");
+            await HandleClient(clientId, ws, ct);
+        }
+        catch (Exception ex)
+        {
+            Log($"Connection error: {ex.Message}");
+        }
+        finally
+        {
+            try { client.Close(); } catch { }
+        }
+    }
+
+    /// <summary>CORS + Private Network Access headers. Chrome requires Access-Control-Allow-Private-Network
+    /// on the preflight (and accepts it on the handshake) before a public page may talk to localhost.</summary>
+    private static string CorsHeaders(string? origin) =>
+        $"Access-Control-Allow-Origin: {(string.IsNullOrEmpty(origin) ? "*" : origin)}\r\n" +
+        "Access-Control-Allow-Private-Network: true\r\n" +          // Chrome <= 140 (Private Network Access)
+        "Access-Control-Allow-Local-Network-Access: true\r\n" +     // Chrome >= 141 (Local Network Access)
+        "Access-Control-Allow-Credentials: true\r\n";
+
+    private static async Task WriteAsync(Stream s, string text, CancellationToken ct)
+    {
+        var bytes = Encoding.ASCII.GetBytes(text);
+        await s.WriteAsync(bytes, ct);
+        await s.FlushAsync(ct);
+    }
+
+    /// <summary>Read the request line + headers (max 16 KB) without consuming any WebSocket payload.</summary>
+    private static async Task<(string? requestLine, Dictionary<string, string> headers)> ReadHttpHeadersAsync(Stream stream, CancellationToken ct)
+    {
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var buf = new byte[1];
+        var sb = new StringBuilder();
+        int total = 0;
+        using var readCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        readCts.CancelAfter(TimeSpan.FromSeconds(10));
+        while (total < 16 * 1024)
+        {
+            int n;
+            try { n = await stream.ReadAsync(buf, readCts.Token); }
+            catch { return (null, headers); }
+            if (n == 0) return (null, headers);
+            sb.Append((char)buf[0]);
+            total++;
+            if (sb.Length >= 4 && sb[^1] == '\n' && sb[^2] == '\r' && sb[^3] == '\n' && sb[^4] == '\r') break;
+        }
+        var lines = sb.ToString().Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length == 0) return (null, headers);
+        foreach (var line in lines.Skip(1))
+        {
+            var i = line.IndexOf(':');
+            if (i > 0) headers[line[..i].Trim()] = line[(i + 1)..].Trim();
+        }
+        return (lines[0], headers);
     }
 
     private async Task HandleClient(string clientId, WebSocket ws, CancellationToken ct)
@@ -184,7 +311,7 @@ public class BridgeWebSocketServer
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
                     // Idle timeout — đóng client
-                    Log($"Client {clientId} idle 5m → đóng");
+                    Log($"Client {clientId} idle 5m -> closing");
                     try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "idle timeout", ct); } catch { }
                     break;
                 }
@@ -226,10 +353,19 @@ public class BridgeWebSocketServer
 
     private async Task ProcessMessage(string clientId, WebSocket ws, string msgText)
     {
+        var response = await Dispatch(msgText);
+        if (response != null) await SendMessage(ws, response);
+    }
+
+    /// <summary>Runs one command (ping / list-certificates / sign / sign-cms) and returns the JSON reply.
+    /// Shared by the WebSocket channel and the HTTPS POST channel.</summary>
+    private async Task<string> Dispatch(string msgText)
+    {
         try
         {
             var request = JsonSerializer.Deserialize<WsRequest>(msgText);
-            if (request == null) return;
+            if (request == null)
+                return JsonSerializer.Serialize(new WsSignResponse { Success = false, Error = "Empty request" });
 
             string response;
 
@@ -245,7 +381,7 @@ public class BridgeWebSocketServer
 
                 case "sign":
                     Log($"Received sign request {request.RequestId}");
-                    response = await HandleSign(ws, request);
+                    response = await HandleSign(request);
                     Log($"Sign request {request.RequestId} done");
                     break;
 
@@ -264,17 +400,12 @@ public class BridgeWebSocketServer
                     break;
             }
 
-            await SendMessage(ws, response);
+            return response;
         }
         catch (Exception ex)
         {
             OnLog?.Invoke($"Process error: {ex.Message}");
-            var errorResponse = JsonSerializer.Serialize(new WsSignResponse
-            {
-                Success = false,
-                Error = ex.Message
-            });
-            await SendMessage(ws, errorResponse);
+            return JsonSerializer.Serialize(new WsSignResponse { Success = false, Error = ex.Message });
         }
     }
 
@@ -285,7 +416,7 @@ public class BridgeWebSocketServer
         return JsonSerializer.Serialize(new WsCertificatesResponse { Certificates = certs });
     }
 
-    private Task<string> HandleSign(WebSocket ws, WsRequest request)
+    private Task<string> HandleSign(WsRequest request)
     {
         if (string.IsNullOrEmpty(request.HashBase64))
             return Task.FromResult(JsonSerializer.Serialize(new WsSignResponse
@@ -305,7 +436,7 @@ public class BridgeWebSocketServer
             return Task.FromResult(JsonSerializer.Serialize(new WsSignResponse
             {
                 RequestId = request.RequestId, Success = false,
-                Error = "Không tìm thấy chứng thư số. Vui lòng chọn cert trước."
+                Error = "Certificate not found. Please select a certificate first."
             }));
         }
 
@@ -350,7 +481,7 @@ public class BridgeWebSocketServer
         if (cert == null)
             return JsonSerializer.Serialize(new WsCmsResponse
             {
-                RequestId = request.RequestId, Success = false, Error = "Không tìm thấy chứng thư số"
+                RequestId = request.RequestId, Success = false, Error = "Certificate not found"
             });
 
         var content = Convert.FromBase64String(request.ContentBase64);

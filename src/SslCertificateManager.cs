@@ -14,13 +14,18 @@ public static class SslCertificateManager
 {
     private const string RootCaSubject = "CN=hSignerBridge Root CA, O=HQV Software";
     private const string LocalhostSubject = "CN=localhost";
+    /// <summary>Extra DNS names for the certificate. Empty on purpose: a public hostname resolving to 127.0.0.1
+    /// buys nothing, because Chrome's Local Network Access check looks at the resolved IP, not the name.</summary>
+    private static readonly string[] ExtraDnsNames = System.Array.Empty<string>();
+    /// <summary>Bump when the certificate contents change so existing installs re-issue it.</summary>
+    private const int CertVersion = 2;
 
     private static string CertFolder => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "hSignerBridge");
 
     private static string RootCaPath => Path.Combine(CertFolder, "rootca.pfx");
-    private static string LocalhostCertPath => Path.Combine(CertFolder, "localhost.pfx");
+    private static string LocalhostCertPath => Path.Combine(CertFolder, $"localhost.v{CertVersion}.pfx");
     private const string CertPassword = "hSignerBridge2024";
 
     /// <summary>
@@ -86,6 +91,7 @@ public static class SslCertificateManager
         // Subject Alternative Names: localhost + 127.0.0.1
         var sanBuilder = new SubjectAlternativeNameBuilder();
         sanBuilder.AddDnsName("localhost");
+        foreach (var extra in ExtraDnsNames) sanBuilder.AddDnsName(extra);
         sanBuilder.AddIpAddress(IPAddress.Loopback);        // 127.0.0.1
         sanBuilder.AddIpAddress(IPAddress.IPv6Loopback);    // ::1
         req.CertificateExtensions.Add(sanBuilder.Build());

@@ -7,11 +7,12 @@
 Trình duyệt web (Chrome/Firefox/Edge) **không được phép truy cập trực tiếp USB Token** vì lý do bảo mật sandbox. hSignerBridge là ứng dụng nhỏ gọn chạy ngầm trên máy, làm cầu nối **localhost WebSocket** giữa trang web và Windows Smart Card KSP/CSP.
 
 ```
-Trình duyệt  ◄── WebSocket wss://localhost:9505 ──►  hSignerBridge.exe  ◄──►  USB Token
+Trình duyệt  ◄── wss://localhost:9505 (hoặc HTTPS POST /rpc) ──►  hSignerBridge.exe  ◄──►  USB Token
 ```
 
 - **PDF không rời khỏi máy** — toàn bộ xử lý client-side
-- **Chỉ lắng nghe localhost** — không mở port ra internet
+- **Chỉ lắng nghe localhost** — bind 127.0.0.1 và ::1, không mở port ra internet
+- **TLS tự phục vụ trong tiến trình** (`TcpListener` + `SslStream`) — không cần quyền administrator
 - **File đã code-sign** bằng chứng thư EV SSL.com
 - **Không lưu PIN, không cache cert**
 
@@ -27,11 +28,18 @@ Hoặc tải từ: https://dotnet.microsoft.com/download/dotnet/8.0
 
 ### 2. Tải và chạy hSignerBridge.exe (~200 KB)
 
-Tải [`hSignerBridge.exe`](./hSignerBridge.exe) và chạy. Icon Shield sẽ xuất hiện trong khay hệ thống. Ứng dụng chạy ngầm, lắng nghe cổng `9505`.
+Tải [`hSignerBridge.exe`](https://github.com/haoquangviet/hSignerBridge/releases/latest/download/hSignerBridge.exe) và chạy. Icon Shield sẽ xuất hiện trong khay hệ thống. Ứng dụng chạy ngầm, lắng nghe cổng `9505`.
 
-### 3. Chấp nhận SSL self-signed
+### 3. Chấp nhận SSL self-signed (nếu trình duyệt hỏi)
 
-Mở https://localhost:9505 trong trình duyệt → "Advanced" → "Proceed" để accept cert tự ký (chỉ cần làm 1 lần).
+hSignerBridge tạo Root CA riêng và import vào Trusted Root của user, nên thường không cần bước này. Nếu trình duyệt
+vẫn cảnh báo, mở https://localhost:9505 → "Advanced" → "Proceed" (chỉ cần làm 1 lần).
+
+### 3b. Chrome 141 trở lên: cho phép "Local network access"
+
+Chrome chặn trang web truy cập ứng dụng chạy trên máy bạn cho tới khi bạn cấp quyền. Khi trang ký hỏi, chọn **Allow**;
+hoặc bấm biểu tượng bên trái thanh địa chỉ → **Site settings** → **Local network access** → **Allow** → tải lại trang.
+Firefox và Edge không cần bước này.
 
 ### 4. Cắm USB Token và dùng
 
@@ -151,6 +159,20 @@ client.loadPdfBase64('JVBERi0xLjQK...');
 client.loadPdfBytes(new Uint8Array([...]));
 client.sign();  // trigger ký số programmatically
 ```
+
+## Trình duyệt
+
+| Trình duyệt | Kênh dùng | Ghi chú |
+|---|---|---|
+| Chrome / Edge 141+ | HTTPS `POST /rpc` | Chrome chặn WebSocket tới localhost (`ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`) kể cả khi đã cấp quyền, nhưng cho phép `fetch()`. Plugin tự chuyển kênh. |
+| Firefox | WebSocket `wss://localhost:9505` | |
+| Trang chạy `http://localhost` | WebSocket, fallback `ws://localhost:9506` | |
+
+Bridge phục vụ **cùng một bộ lệnh** (`ping`, `list-certificates`, `sign`, `sign-cms`) trên cả hai kênh, kèm header
+`Access-Control-Allow-Private-Network` / `Access-Control-Allow-Local-Network-Access` cho preflight của Chrome.
+
+> **Lưu ý:** đặt tên miền công khai trỏ về `127.0.0.1` **không** vượt qua được chặn của Chrome — Chrome phân loại theo
+> địa chỉ IP sau khi phân giải, nên vẫn thuộc "local network".
 
 ## Tính năng
 

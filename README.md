@@ -51,7 +51,7 @@ Plugin là **một tệp JS duy nhất, không phụ thuộc thư viện ngoài*
 
 ```html
 <div id="pdfsign"></div>
-<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js"></script>
 <script>
   new PdfSignClient({ container: '#pdfsign', allowFileOpen: true });
 </script>
@@ -59,18 +59,18 @@ Plugin là **một tệp JS duy nhất, không phụ thuộc thư viện ngoài*
 
 | CDN | URL |
 |---|---|
-| jsDelivr (GitHub) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js` |
-| jsDelivr (minify tự động) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.min.js` |
-| jsDelivr (npm) | `https://cdn.jsdelivr.net/npm/hsignerbridge@1.1.0/web/pdfsignclient.js` |
-| unpkg (npm) | `https://unpkg.com/hsignerbridge@1.1.0/web/pdfsignclient.js` |
+| jsDelivr (GitHub) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js` |
+| jsDelivr (minify tự động) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.min.js` |
+| jsDelivr (npm) | `https://cdn.jsdelivr.net/npm/hsignerbridge@1.2.0/web/pdfsignclient.js` |
+| unpkg (npm) | `https://unpkg.com/hsignerbridge@1.2.0/web/pdfsignclient.js` |
 | npm | `npm i hsignerbridge` |
 
-**Nên ghim theo tag** (`@v1.1.0`) thay vì `@main`/`@latest`: đây là plugin ký số, tệp đổi bất ngờ là rủi ro.
+**Nên ghim theo tag** (`@v1.2.0`) thay vì `@main`/`@latest`: đây là plugin ký số, tệp đổi bất ngờ là rủi ro.
 Kèm SRI để trình duyệt tự kiểm tra toàn vẹn:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js"
-        integrity="sha384-Aqa0qQ0wT+V0/HilzTu6t13KqExTLb+vI8BFqMc9AjocxWp3xYXOeQydmUYRUFV2"
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js"
+        integrity="sha384-BuTesK8OCeehDzwD1p7lkvKrb2T/Ayk25feKuteVD4m+ElJrRo2Mjc8ajap8Aj6W"
         crossorigin="anonymous"></script>
 ```
 
@@ -210,15 +210,28 @@ Bridge phục vụ **cùng một bộ lệnh** (`ping`, `list-certificates`, `si
 
 ## Tính năng
 
-- **Plugin JS (~330 KB)** tự chứa: UI, logic, hSignerBridge.exe embed base64
-- **Render PDF đa trang cuộn dọc** (không phải xem 1 trang 1 lần)
-- **3 kiểu chữ ký**: vẽ tay (perfect-freehand mượt như bút mực), gõ chữ (font Caveat), tải ảnh
-- **3 màu mực**: đen, xanh bút bi `#0033A0`, đỏ mực `#B91C1C`
-- **Kéo thả chữ ký** lên vị trí bất kỳ, resize, giữ aspect ratio
-- **Composite tự động**: ghép chữ ký + "Ký bởi: [CN]" + timestamp trước khi nhúng PDF
-- **Modal chọn cert** hiển thị token type, CN, Issuer, HSD, Key algorithm
-- **Modal hướng dẫn cài đặt** tự hiện khi chưa kết nối được bridge
-- **Tuỳ biến màu thương hiệu** qua CSS variables
+**Xem & đặt chữ ký**
+- **Xem PDF nhiều trang**: cuộn tất cả trang hoặc chuyển chế độ **từng trang**, nút trang trước/sau, zoom −/+/Fit, kéo để di chuyển khi zoom lớn
+- **Đặt chữ ký bằng kéo-thả** lên đúng vị trí mong muốn, đổi kích thước bằng nút góc, ô mờ theo con trỏ để canh trước khi thả
+- **3 kiểu chữ ký**: vẽ tay (perfect-freehand), gõ chữ (font Caveat), tải ảnh — kèm 3 màu mực
+- `signatureAppearance`: chỉ ảnh chữ ký, hoặc ghép thêm "Ký bởi \[CN\]" + thời gian
+
+**Biểu mẫu & nhiều người ký** (tuỳ chọn, cho hệ thống eSign)
+- `prepareMode` + `fieldsEditable`: kéo-thả các trường **Chữ ký / Văn bản / Checkbox / Radio / Danh sách chọn** lên trang, gán cho từng người ký
+- `signers`: nhiều người ký, mỗi người một màu và một bộ trường riêng
+- Panel **"Cần hoàn tất"** liệt kê các trường phải điền, bấm là nhảy tới, có nút tới/lui; `autoFill` + `linkSameLabel` điền hàng loạt các trường cùng nhãn
+- `lockedPosition`: khoá vị trí ô ký để người nhận không di chuyển được
+
+**Cách ký**
+- **Ký bằng USB Token** ngay trên máy (mặc định) — PDF không rời khỏi trình duyệt
+- `deferred`: ký kiểu deferred (server chuẩn bị placeholder → Bridge ký CMS → server nhúng) cho luồng nhiều người ký
+- `imageSign`: ký điện tử không cần token (server đóng dấu + seal), `serverSign`: gửi vị trí về server ký bằng profile
+
+**Kết nối**
+- Tự chọn kênh: `wss://localhost:9505`, hoặc **HTTPS `POST /rpc`** khi trình duyệt chặn WebSocket (Chrome 141+)
+- Plugin một tệp JS, không phụ thuộc thư viện ngoài, đã nhúng sẵn hSignerBridge.exe base64
+- Tuỳ biến màu thương hiệu qua CSS variables, đổi toàn bộ nhãn qua `labels`
+
 
 ## Chuẩn chữ ký
 

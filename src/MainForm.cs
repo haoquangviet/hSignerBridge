@@ -55,10 +55,14 @@ public class MainForm : Form
         exitItem.Click += OnExit;
         _trayMenu.Items.Add(exitItem);
 
-        // Tray icon
+        // Tray icon — lấy icon nhúng trong exe (hOne.ico), fallback Shield
+        Icon appIcon;
+        try { appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Shield; }
+        catch { appIcon = SystemIcons.Shield; }
+        Icon = appIcon;              // icon cửa sổ/taskbar, hộp thoại kế thừa theo
         _trayIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Shield,
+            Icon = appIcon,
             Text = "hSignerBridge - Cầu nối ký số",
             ContextMenuStrip = _trayMenu,
             Visible = true

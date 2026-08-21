@@ -5,12 +5,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>hSignerBridge</AssemblyName>
     <RootNamespace>hSignerBridge</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Company>HQV Software</Company>
     <Product>hSignerBridge</Product>
     <Description>USB Token Signing Bridge - WebSocket localhost server for browser-based PDF digital signing</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>hOne.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>none</DebugType>

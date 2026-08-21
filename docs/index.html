@@ -62,16 +62,24 @@
 
   <div id="app"></div>
 
+  <h2 style="font-size:20px;margin-top:26px;">Có gì trong bản này</h2>
+  <div class="grid">
+    <div class="card"><b>Xem PDF nhiều trang</b><span>Cuộn tất cả trang hoặc xem từng trang, zoom, Fit, kéo di chuyển khi phóng to.</span></div>
+    <div class="card"><b>Kéo-thả chữ ký</b><span>Đặt chữ ký đúng chỗ cần ký, đổi kích thước bằng nút góc.</span></div>
+    <div class="card"><b>Trường biểu mẫu</b><span>Chữ ký, văn bản, checkbox, radio, danh sách chọn — gán cho từng người ký.</span></div>
+    <div class="card"><b>Chạy được trên Chrome 141+</b><span>Tự chuyển sang kênh HTTPS khi trình duyệt chặn WebSocket tới localhost.</span></div>
+  </div>
+
   <h2 style="font-size:20px;margin-top:26px;">Nhúng vào trang của bạn</h2>
   <pre>&lt;div id="app"&gt;&lt;/div&gt;
-&lt;script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js"&gt;&lt;/script&gt;
 &lt;script&gt;
   new PdfSignClient({ container: '#app' });
 &lt;/script&gt;</pre>
   <p style="color:var(--muted);font-size:13.5px;">
-    Nên ghim theo tag (<code>@v1.1.0</code>) thay vì <code>@main</code>, và cân nhắc dùng
+    Nên ghim theo tag (<code>@v1.2.0</code>) thay vì <code>@main</code>, và cân nhắc dùng
     <a href="https://developer.mozilla.org/docs/Web/Security/Subresource_Integrity">SRI</a> để trình duyệt kiểm tra toàn vẹn tệp.
-    Bản trên npm: <code>npm i hsignerbridge</code> → <code>https://unpkg.com/hsignerbridge@1.1.0/web/pdfsignclient.js</code>.
+    Bản trên npm: <code>npm i hsignerbridge</code> → <code>https://unpkg.com/hsignerbridge@1.2.0/web/pdfsignclient.js</code>.
   </p>
 </div>
 
@@ -80,7 +88,7 @@
   hSignerBridge.exe được ký số bởi HAO QUANG VIET SOFTWARE COMPANY LIMITED.
 </div></footer>
 
-<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js"></script>
 <script>
   window.addEventListener('DOMContentLoaded', function () {
     if (typeof PdfSignClient !== 'function') {

@@ -70,7 +70,7 @@ Kèm SRI để trình duyệt tự kiểm tra toàn vẹn:
 
 ```html
 <script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js"
-        integrity="sha384-BuTesK8OCeehDzwD1p7lkvKrb2T/Ayk25feKuteVD4m+ElJrRo2Mjc8ajap8Aj6W"
+        integrity="sha384-vNY2fBEvxkWOd5ShUl1+esK7A5+cs2MNzF/RDf2AEhcXmCOPK9haTT1eTzp4wDUl"
         crossorigin="anonymous"></script>
 ```
 

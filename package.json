@@ -1,0 +1,47 @@
+{
+  "name": "hsignerbridge",
+  "version": "1.1.0",
+  "description": "Client-side PDF digital signing in the browser with a USB token (ePass2003, SafeNet, VNPT-CA, Viettel-CA, YubiKey) — JS plugin + local signing bridge for Windows",
+  "main": "web/pdfsignclient.js",
+  "unpkg": "web/pdfsignclient.js",
+  "jsdelivr": "web/pdfsignclient.js",
+  "browser": "web/pdfsignclient.js",
+  "files": [
+    "web/pdfsignclient.js",
+    "web/demo.html",
+    "web/demo-custom.html",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "web/pdfsignclient.js"
+  ],
+  "keywords": [
+    "pdf",
+    "digital-signature",
+    "usb-token",
+    "smartcard",
+    "pkcs7",
+    "cms",
+    "pades",
+    "chu-ky-so",
+    "epass2003",
+    "safenet",
+    "yubikey",
+    "vnpt-ca",
+    "viettel-ca"
+  ],
+  "homepage": "https://github.com/haoquangviet/hSignerBridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haoquangviet/hSignerBridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/haoquangviet/hSignerBridge/issues"
+  },
+  "author": "HQV Software",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

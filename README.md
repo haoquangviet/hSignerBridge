@@ -45,6 +45,40 @@ Firefox và Edge không cần bước này.
 
 Vào trang web có tích hợp plugin ký số → trang sẽ tự động kết nối bridge.
 
+## Dùng qua CDN
+
+Plugin là **một tệp JS duy nhất, không phụ thuộc thư viện ngoài** — nạp thẳng từ CDN là chạy:
+
+```html
+<div id="pdfsign"></div>
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js"></script>
+<script>
+  new PdfSignClient({ container: '#pdfsign', allowFileOpen: true });
+</script>
+```
+
+| CDN | URL |
+|---|---|
+| jsDelivr (GitHub) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js` |
+| jsDelivr (minify tự động) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.min.js` |
+| jsDelivr (npm) | `https://cdn.jsdelivr.net/npm/hsignerbridge@1.1.0/web/pdfsignclient.js` |
+| unpkg (npm) | `https://unpkg.com/hsignerbridge@1.1.0/web/pdfsignclient.js` |
+| npm | `npm i hsignerbridge` |
+
+**Nên ghim theo tag** (`@v1.1.0`) thay vì `@main`/`@latest`: đây là plugin ký số, tệp đổi bất ngờ là rủi ro.
+Kèm SRI để trình duyệt tự kiểm tra toàn vẹn:
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.1.0/web/pdfsignclient.js"
+        integrity="sha384-Aqa0qQ0wT+V0/HilzTu6t13KqExTLb+vI8BFqMc9AjocxWp3xYXOeQydmUYRUFV2"
+        crossorigin="anonymous"></script>
+```
+
+Nếu trang có Content-Security-Policy, nhớ cho phép `script-src https://cdn.jsdelivr.net` và
+`connect-src https://localhost:9505 wss://localhost:9505`.
+
+Demo online: **https://haoquangviet.github.io/hSignerBridge/**
+
 ## Tích hợp (cho developer)
 
 ### Quick start

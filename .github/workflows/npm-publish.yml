@@ -1,0 +1,38 @@
+name: Publish to npm
+
+# Chạy khi push tag vX.Y.Z (hoặc bấm tay). Cần secret NPM_TOKEN (Automation token trên npmjs.com).
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # cho phép npm provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Kiểm tra version trong package.json khớp tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          echo "tag=$TAG package.json=$PKG"
+          test "$TAG" = "$PKG"
+
+      - name: Kiểm tra plugin còn nhúng được exe
+        run: |
+          node -e "new Function(require('fs').readFileSync('web/pdfsignclient.js','utf8')); console.log('syntax OK')"
+          node -e "const s=require('fs').readFileSync('web/pdfsignclient.js','utf8'); const m=s.match(/const BRIDGE_EXE_B64 = '([^']*)'/); if(!m||m[1].length<100000) throw new Error('BRIDGE_EXE_B64 trống hoặc quá nhỏ'); console.log('exe embedded:', m[1].length, 'chars');"
+
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

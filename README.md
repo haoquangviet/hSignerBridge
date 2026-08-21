@@ -51,7 +51,7 @@ Plugin là **một tệp JS duy nhất, không phụ thuộc thư viện ngoài*
 
 ```html
 <div id="pdfsign"></div>
-<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.js"></script>
 <script>
   new PdfSignClient({ container: '#pdfsign', allowFileOpen: true });
 </script>
@@ -59,17 +59,17 @@ Plugin là **một tệp JS duy nhất, không phụ thuộc thư viện ngoài*
 
 | CDN | URL |
 |---|---|
-| jsDelivr (GitHub) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js` |
-| jsDelivr (minify tự động) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.min.js` |
-| jsDelivr (npm) | `https://cdn.jsdelivr.net/npm/hsignerbridge@1.2.0/web/pdfsignclient.js` |
-| unpkg (npm) | `https://unpkg.com/hsignerbridge@1.2.0/web/pdfsignclient.js` |
+| jsDelivr (GitHub) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.js` |
+| jsDelivr (minify tự động) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.min.js` |
+| jsDelivr (npm) | `https://cdn.jsdelivr.net/npm/hsignerbridge@1.3.0/web/pdfsignclient.js` |
+| unpkg (npm) | `https://unpkg.com/hsignerbridge@1.3.0/web/pdfsignclient.js` |
 | npm | `npm i hsignerbridge` |
 
-**Nên ghim theo tag** (`@v1.2.0`) thay vì `@main`/`@latest`: đây là plugin ký số, tệp đổi bất ngờ là rủi ro.
+**Nên ghim theo tag** (`@v1.3.0`) thay vì `@main`/`@latest`: đây là plugin ký số, tệp đổi bất ngờ là rủi ro.
 Kèm SRI để trình duyệt tự kiểm tra toàn vẹn:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.2.0/web/pdfsignclient.js"
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.js"
         integrity="sha384-vNY2fBEvxkWOd5ShUl1+esK7A5+cs2MNzF/RDf2AEhcXmCOPK9haTT1eTzp4wDUl"
         crossorigin="anonymous"></script>
 ```
@@ -193,6 +193,29 @@ client.loadPdfBase64('JVBERi0xLjQK...');
 client.loadPdfBytes(new Uint8Array([...]));
 client.sign();  // trigger ký số programmatically
 ```
+
+## Song ngữ & tuỳ biến
+
+Plugin có sẵn **tiếng Việt và tiếng Anh**, tự chọn theo trình duyệt:
+
+```javascript
+new PdfSignClient({
+  container: '#pdfsign',
+  lang: 'auto',            // 'auto' (mặc định, theo navigator.language) | 'vi' | 'en'
+  labels: { signBtn: 'Ký hợp đồng' },   // ghi đè từng nhãn nếu muốn
+  maxHeight: '100vh',      // khung cao tối đa, PDF cuộn bên trong ('none' = cao theo nội dung)
+});
+```
+
+Toàn bộ chữ trong plugin đều đi qua bảng nhãn: thanh công cụ, bảng tạo chữ ký, hộp chọn chứng thư, thông báo tiến trình/lỗi và cả hộp hướng dẫn cài đặt.
+
+## Khi trình duyệt báo lỗi chứng thư
+
+Nếu Firefox báo `SEC_ERROR_BAD_SIGNATURE` hoặc Chrome báo `ERR_CERT_AUTHORITY_INVALID` — thường do máy còn Root CA cũ của ứng dụng (trùng tên, khác khoá):
+
+1. Bấm chuột phải icon hSignerBridge ở khay hệ thống → **Sửa lỗi chứng thư SSL**.
+2. Xác nhận — ứng dụng xoá root cũ, phát hành lại chứng thư và tự khởi động lại server.
+3. Tải lại trang ký. Với Firefox, khởi động lại trình duyệt một lần để nhận root mới.
 
 ## Trình duyệt
 

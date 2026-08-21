@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography;
@@ -36,37 +37,131 @@ public static class SslCertificateManager
     {
         Directory.CreateDirectory(CertFolder);
 
-        // Nếu đã có cert và còn hạn → dùng lại
+        // Root CA phải được GIỮ NGUYÊN giữa các lần chạy/nâng cấp: nếu sinh root mới trong khi trình duyệt vẫn
+        // tin root cũ (trùng Subject, khác khoá) thì Firefox báo SEC_ERROR_BAD_SIGNATURE.
+        var rootCa = GetOrCreateRootCa();
+
         if (File.Exists(LocalhostCertPath))
         {
             try
             {
                 var existing = new X509Certificate2(LocalhostCertPath, CertPassword,
                     X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
-                if (existing.NotAfter > DateTime.Now.AddDays(30))
+                if (existing.NotAfter > DateTime.Now.AddDays(30) && IsIssuedBy(existing, rootCa))
+                {
+                    ImportRootCaToStore(rootCa);      // đảm bảo root vẫn nằm trong Trusted Root
                     return existing;
+                }
             }
-            catch { /* cert bị lỗi, tạo lại */ }
+            catch { /* hỏng file → phát hành lại */ }
         }
 
-        // Tạo Root CA
-        var rootCa = CreateRootCa();
-        File.WriteAllBytes(RootCaPath, rootCa.Export(X509ContentType.Pfx, CertPassword));
-
-        // Tạo localhost cert ký bởi Root CA
         var localhostCert = CreateLocalhostCert(rootCa);
         File.WriteAllBytes(LocalhostCertPath, localhostCert.Export(X509ContentType.Pfx, CertPassword));
-
-        // Import Root CA vào Trusted Root (cần admin lần đầu)
         ImportRootCaToStore(rootCa);
-
         return localhostCert;
+    }
+
+    /// <summary>Đọc lại rootca.pfx nếu còn dùng được, chỉ tạo mới khi chưa có / sắp hết hạn.</summary>
+    private static X509Certificate2 GetOrCreateRootCa()
+    {
+        if (File.Exists(RootCaPath))
+        {
+            try
+            {
+                var existing = new X509Certificate2(RootCaPath, CertPassword,
+                    X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
+                if (existing.NotAfter > DateTime.Now.AddDays(60) && existing.HasPrivateKey)
+                    return existing;
+            }
+            catch { /* hỏng file → tạo lại */ }
+        }
+
+        var rootCa = CreateRootCa();
+        File.WriteAllBytes(RootCaPath, rootCa.Export(X509ContentType.Pfx, CertPassword));
+        return rootCa;
+    }
+
+    /// <summary>Chữ ký của leaf có verify được bằng khoá công khai của root không.</summary>
+    private static bool IsIssuedBy(X509Certificate2 leaf, X509Certificate2 root)
+    {
+        try
+        {
+            using var chain = new X509Chain();
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
+            chain.ChainPolicy.ExtraStore.Add(root);
+            chain.Build(leaf);
+            return chain.ChainElements.Count > 1 &&
+                   string.Equals(chain.ChainElements[^1].Certificate.Thumbprint, root.Thumbprint, StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Trạng thái chứng thư hiện tại — dùng cho menu chẩn đoán.</summary>
+    public static string Diagnose()
+    {
+        var sb = new System.Text.StringBuilder();
+        var baseCn = RootCaSubject.Split(',')[0].Trim();
+        try
+        {
+            using var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadOnly);
+            var mine = new List<X509Certificate2>();
+            foreach (var c in store.Certificates)
+                if (c.Subject.StartsWith(baseCn, StringComparison.OrdinalIgnoreCase)) mine.Add(c);
+
+            sb.AppendLine($"Root CA trong Trusted Root: {mine.Count}");
+            foreach (var c in mine) sb.AppendLine($"  - {c.Subject.Split(',')[0]}  [{c.Thumbprint?[..8]}…]  hết hạn {c.NotAfter:dd/MM/yyyy}");
+        }
+        catch (Exception ex) { sb.AppendLine("Không đọc được Trusted Root: " + ex.Message); }
+
+        try
+        {
+            if (File.Exists(LocalhostCertPath))
+            {
+                var leaf = new X509Certificate2(LocalhostCertPath, CertPassword, X509KeyStorageFlags.EphemeralKeySet);
+                sb.AppendLine($"Chứng thư localhost: hết hạn {leaf.NotAfter:dd/MM/yyyy}, cấp bởi {leaf.Issuer.Split(',')[0]}");
+                if (File.Exists(RootCaPath))
+                {
+                    var root = new X509Certificate2(RootCaPath, CertPassword, X509KeyStorageFlags.EphemeralKeySet);
+                    sb.AppendLine("Khớp với Root CA đang lưu: " + (IsIssuedBy(leaf, root) ? "có" : "KHÔNG"));
+                }
+            }
+            else sb.AppendLine("Chưa có chứng thư localhost.");
+        }
+        catch (Exception ex) { sb.AppendLine("Không đọc được chứng thư localhost: " + ex.Message); }
+
+        return sb.ToString();
+    }
+
+    /// <summary>Xoá sạch Root CA + chứng thư cũ của ứng dụng rồi phát hành lại (dùng khi trình duyệt báo
+    /// SEC_ERROR_BAD_SIGNATURE / ERR_CERT_AUTHORITY_INVALID vì máy còn root cũ trùng tên).</summary>
+    public static X509Certificate2 Repair()
+    {
+        var baseCn = RootCaSubject.Split(',')[0].Trim();
+        try
+        {
+            using var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            foreach (var c in store.Certificates)
+                if (c.Subject.StartsWith(baseCn, StringComparison.OrdinalIgnoreCase)) store.Remove(c);
+        }
+        catch { /* không xoá được thì vẫn tiếp tục phát hành cert mới */ }
+
+        try { if (File.Exists(LocalhostCertPath)) File.Delete(LocalhostCertPath); } catch { }
+        try { if (File.Exists(RootCaPath)) File.Delete(RootCaPath); } catch { }
+
+        return GetOrCreateLocalhostCert();
     }
 
     private static X509Certificate2 CreateRootCa()
     {
         using var rsa = RSA.Create(2048);
-        var req = new CertificateRequest(RootCaSubject, rsa, HashAlgorithmName.SHA256,
+        // Thêm id ngẫu nhiên vào CN: nếu máy còn root cũ cùng tên (khác khoá), trình duyệt sẽ không chọn nhầm
+        // rồi báo "Peer's certificate has an invalid signature".
+        var uniqueSubject = RootCaSubject.Replace("Root CA", "Root CA " + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant());
+        var req = new CertificateRequest(uniqueSubject, rsa, HashAlgorithmName.SHA256,
             RSASignaturePadding.Pkcs1);
 
         req.CertificateExtensions.Add(new X509BasicConstraintsExtension(
@@ -124,10 +219,12 @@ public static class SslCertificateManager
             using var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadWrite);
 
-            // Xoá Root CA cũ nếu có
+            // Xoá mọi Root CA cũ của ứng dụng (trùng tên nhưng khác khoá) — nguồn gốc lỗi SEC_ERROR_BAD_SIGNATURE
+            var baseCn = RootCaSubject.Split(',')[0].Trim();          // "CN=... Root CA"
             foreach (var existing in store.Certificates)
             {
-                if (existing.Subject == RootCaSubject)
+                if (existing.Subject.StartsWith(baseCn, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(existing.Thumbprint, rootCa.Thumbprint, StringComparison.OrdinalIgnoreCase))
                     store.Remove(existing);
             }
 

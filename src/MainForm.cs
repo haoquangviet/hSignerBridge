@@ -49,6 +49,10 @@ public class MainForm : Form
         listCertsItem.Click += OnListCerts;
         _trayMenu.Items.Add(listCertsItem);
 
+        var repairItem = new ToolStripMenuItem("Sửa lỗi chứng thư SSL");
+        repairItem.Click += OnRepairCert;
+        _trayMenu.Items.Add(repairItem);
+
         _trayMenu.Items.Add(new ToolStripSeparator());
 
         var exitItem = new ToolStripMenuItem("Thoát");
@@ -163,6 +167,33 @@ public class MainForm : Form
     {
         var m = System.Text.RegularExpressions.Regex.Match(subject, @"CN=([^,]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         return m.Success ? m.Groups[1].Value.Trim() : subject;
+    }
+
+    private void OnRepairCert(object? sender, EventArgs e)
+    {
+        var info = SslCertificateManager.Diagnose();
+        var ask = MessageBox.Show(
+            "Phát hành lại chứng thư SSL cho localhost?\n\n" +
+            "Dùng khi trình duyệt báo SEC_ERROR_BAD_SIGNATURE hoặc ERR_CERT_AUTHORITY_INVALID — thường do máy còn " +
+            "root cũ của ứng dụng (trùng tên, khác khoá).\n\n" +
+            "Hiện trạng:\n" + info,
+            "Sửa lỗi chứng thư SSL", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (ask != DialogResult.Yes) return;
+
+        try
+        {
+            SslCertificateManager.Repair();
+            _wsServer.Restart();
+            MessageBox.Show(
+                "Đã phát hành lại chứng thư và thêm vào Trusted Root của người dùng.\n\n" +
+                "Hãy tải lại trang ký. Nếu dùng Firefox, khởi động lại Firefox một lần để nhận root mới.",
+                "Sửa lỗi chứng thư SSL", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Không phát hành lại được chứng thư: " + ex.Message,
+                "Sửa lỗi chứng thư SSL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void OnExit(object? sender, EventArgs e)

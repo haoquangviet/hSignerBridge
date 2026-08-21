@@ -95,6 +95,15 @@ public class BridgeWebSocketServer
         }
     }
 
+    /// <summary>Khởi động lại listener (dùng sau khi phát hành lại chứng thư SSL).</summary>
+    public void Restart()
+    {
+        Stop();
+        System.Threading.Thread.Sleep(300);
+        _sslCert = null;
+        Start();
+    }
+
     public void Stop()
     {
         _cts?.Cancel();

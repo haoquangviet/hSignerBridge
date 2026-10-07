@@ -14,7 +14,7 @@ Trình duyệt  ◄── wss://localhost:9505 (hoặc HTTPS POST /rpc) ──�
 - **Chỉ lắng nghe localhost** — bind 127.0.0.1 và ::1, không mở port ra internet
 - **TLS tự phục vụ trong tiến trình** (`TcpListener` + `SslStream`) — không cần quyền administrator
 - **File đã code-sign** bằng chứng thư EV SSL.com
-- **Không lưu PIN, không cache cert**
+- **Không lưu PIN, không cache cert** — PIN nhập trong hộp chọn chứng thư (nếu có) chỉ dùng cho đúng lần ký đó
 
 ## Cài đặt (cho người dùng cuối)
 
@@ -26,7 +26,7 @@ winget install Microsoft.DotNet.DesktopRuntime.8
 
 Hoặc tải từ: https://dotnet.microsoft.com/download/dotnet/8.0
 
-### 2. Tải và chạy hSignerBridge.exe (~200 KB)
+### 2. Tải và chạy hSignerBridge.exe (~900 KB)
 
 Tải [`hSignerBridge.exe`](https://github.com/haoquangviet/hSignerBridge/releases/latest/download/hSignerBridge.exe) và chạy. Icon Shield sẽ xuất hiện trong khay hệ thống. Ứng dụng chạy ngầm, lắng nghe cổng `9505`.
 
@@ -51,7 +51,7 @@ Plugin là **một tệp JS duy nhất, không phụ thuộc thư viện ngoài*
 
 ```html
 <div id="pdfsign"></div>
-<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.4.0/web/pdfsignclient.js"></script>
 <script>
   new PdfSignClient({ container: '#pdfsign', allowFileOpen: true });
 </script>
@@ -59,18 +59,18 @@ Plugin là **một tệp JS duy nhất, không phụ thuộc thư viện ngoài*
 
 | CDN | URL |
 |---|---|
-| jsDelivr (GitHub) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.js` |
-| jsDelivr (minify tự động) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.min.js` |
-| jsDelivr (npm) | `https://cdn.jsdelivr.net/npm/hsignerbridge@1.3.0/web/pdfsignclient.js` |
-| unpkg (npm) | `https://unpkg.com/hsignerbridge@1.3.0/web/pdfsignclient.js` |
+| jsDelivr (GitHub) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.4.0/web/pdfsignclient.js` |
+| jsDelivr (minify tự động) | `https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.4.0/web/pdfsignclient.min.js` |
+| jsDelivr (npm) | `https://cdn.jsdelivr.net/npm/hsignerbridge@1.4.0/web/pdfsignclient.js` |
+| unpkg (npm) | `https://unpkg.com/hsignerbridge@1.4.0/web/pdfsignclient.js` |
 | npm | `npm i hsignerbridge` |
 
-**Nên ghim theo tag** (`@v1.3.0`) thay vì `@main`/`@latest`: đây là plugin ký số, tệp đổi bất ngờ là rủi ro.
+**Nên ghim theo tag** (`@v1.4.0`) thay vì `@main`/`@latest`: đây là plugin ký số, tệp đổi bất ngờ là rủi ro.
 Kèm SRI để trình duyệt tự kiểm tra toàn vẹn:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.3.0/web/pdfsignclient.js"
-        integrity="sha384-gc3Tk9TcwcIgJ/1uZbeFUfB8tN+A/oRCkAXyMQhrebImHpmN2iiW5cLpot7Flagv"
+<script src="https://cdn.jsdelivr.net/gh/haoquangviet/hSignerBridge@v1.4.0/web/pdfsignclient.js"
+        integrity="sha384-ZWTA4VTNMdyXXUimTyM2KQ4HBuXJtWgArciBPVbvPG9GcXRAhFeD4gbncwSSIFv1"
         crossorigin="anonymous"></script>
 ```
 
@@ -249,12 +249,27 @@ Bridge phục vụ **cùng một bộ lệnh** (`ping`, `list-certificates`, `si
 - **Ký bằng USB Token** ngay trên máy (mặc định) — PDF không rời khỏi trình duyệt
 - `deferred`: ký kiểu deferred (server chuẩn bị placeholder → Bridge ký CMS → server nhúng) cho luồng nhiều người ký
 - `imageSign`: ký điện tử không cần token (server đóng dấu + seal), `serverSign`: gửi vị trí về server ký bằng profile
+- **Ô PIN token (không bắt buộc)** trong hộp chọn chứng thư: có PIN thì Bridge ký qua **module PKCS#11 của chính hãng token** (Viettel-CA, VNPT-CA, FastCA…) — không bật cửa sổ PIN của driver. Để trống thì như cũ: driver tự hỏi PIN. Xem [Ký qua PKCS#11](#ký-qua-pkcs11-khi-có-pin)
 
 **Kết nối**
 - Tự chọn kênh: `wss://localhost:9505`, hoặc **HTTPS `POST /rpc`** khi trình duyệt chặn WebSocket (Chrome 141+)
 - Plugin một tệp JS, không phụ thuộc thư viện ngoài, đã nhúng sẵn hSignerBridge.exe base64
 - Tuỳ biến màu thương hiệu qua CSS variables, đổi toàn bộ nhãn qua `labels`
 
+
+## Ký qua PKCS#11 khi có PIN
+
+Một số driver token (ví dụ Viettel-CA V6 cài kèm Key Storage Provider) **bỏ qua PIN do ứng dụng truyền vào** và luôn bật cửa sổ nhập PIN. Khi lệnh `sign` / `sign-cms` có trường `pin` và key không thuộc provider của Microsoft/SafeNet/YubiKey, Bridge gọi thẳng module PKCS#11 của hãng (`C_Login`), theo thứ tự:
+
+1. Suy từ CSP/KSP của chứng thư: `X_s.dll` (vỏ CSP) → `X.dll` (module PKCS#11 đầy đủ), ví dụ `viettel-ca_v6_s.dll` → `viettel-ca_v6.dll`
+2. Danh sách module CA Việt Nam (Viettel-CA, VNPT-CA, FastCA, BKAV, FPT-CA, CA2, SafeCert, EFY…) và hãng toàn cầu (Feitian/ePass, SafeNet, Bit4id, Gemalto, Luna, nCipher, Yubico…)
+3. OpenSC (`opensc-pkcs11.dll`) nếu có cài
+
+Bridge chỉ đăng nhập trên đúng token chứa chứng thư đã chọn. **PIN sai thì dừng ngay** (không thử lại qua CSP, tránh làm khoá token). Không truyền `pin` thì hoàn toàn như bản cũ. Thư viện: [Pkcs11Interop](https://github.com/Pkcs11Interop/Pkcs11Interop) 5.3.0 (Apache-2.0).
+
+```json
+{ "action": "sign-cms", "certificateThumbprint": "…", "contentBase64": "…", "pin": "12345678" }
+```
 
 ## Chuẩn chữ ký
 
@@ -274,7 +289,8 @@ Adobe Reader / Foxit verify được chữ ký là **VALID**, hiển thị tên 
 | ePass2003 | EnterSafe CSP | RSA | ✅ |
 | SafeNet eToken | SafeNet CSP/KSP | RSA | ✅ |
 | VNPT-CA | VNPT-CA SmartCard CSP | RSA | ✅ |
-| Viettel-CA | Viettel-CA CSP | RSA | ✅ |
+| Viettel-CA V6 | Viettel-CA CSP/KSP, hoặc PKCS#11 `viettel-ca_v6.dll` khi có PIN | RSA | ✅ |
+| FastCA | PKCS#11 `fca_v1.dll` khi có PIN | RSA | ✅ |
 
 ## Yêu cầu hệ thống
 

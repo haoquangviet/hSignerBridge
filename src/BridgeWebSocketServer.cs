@@ -453,7 +453,7 @@ public class BridgeWebSocketServer
 
         // Windows tự hiện PIN dialog khi SignHash trên smart card cert (native, luôn foreground)
         Log($"Signing with cert: {cert.Subject}");
-        var result = TokenSigner.SignHashWithCert(hash, request.HashAlgorithm, cert);
+        var result = TokenSigner.SignHashWithCert(hash, request.HashAlgorithm, cert, request.Pin);
 
         if (result.Success)
         {
@@ -495,7 +495,7 @@ public class BridgeWebSocketServer
 
         var content = Convert.FromBase64String(request.ContentBase64);
         Log($"Building CMS for {content.Length} bytes with cert {cert.Subject}");
-        var result = TokenSigner.SignCms(content, cert);
+        var result = TokenSigner.SignCms(content, cert, request.Pin);
 
         if (result.Success)
         {

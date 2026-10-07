@@ -12,9 +12,25 @@ namespace hSignerBridge;
 public static class TokenSigner
 {
     /// <summary>
+    /// Module PKCS#11 của hãng token, khi trang web truyền PIN và key nằm trên token hãng thứ ba (Viettel-CA, VNPT-CA,
+    /// FastCA… — CSP/KSP của họ có thể bỏ qua PIN do ứng dụng truyền). Null = dùng key provider của Windows (tự hiện
+    /// hộp thoại PIN). PIN sai thì ném lỗi, không thử lại qua CSP để tránh khoá token.
+    /// </summary>
+    private static AsymmetricAlgorithm? OpenPkcs11(X509Certificate2 cert, string? pin)
+    {
+        if (string.IsNullOrEmpty(pin) || !Pkcs11KeyProvider.ShouldTry(cert, null)) return null;
+        try
+        {
+            return Pkcs11KeyProvider.TryOpen(cert, pin, null, cert.GetECDsaPublicKey() != null);
+        }
+        catch (Pkcs11PinException) { throw; }
+        catch { return null; }
+    }
+
+    /// <summary>
     /// Ký hash bằng certificate đã chọn. Windows sẽ tự hiện PIN dialog.
     /// </summary>
-    public static SignResult SignHashWithCert(byte[] hash, string? hashAlgorithm, X509Certificate2 cert)
+    public static SignResult SignHashWithCert(byte[] hash, string? hashAlgorithm, X509Certificate2 cert, string? pin = null)
     {
         try
         {
@@ -29,14 +45,15 @@ public static class TokenSigner
             };
 
             byte[] signature;
-            var rsaKey = cert.GetRSAPrivateKey();
+            using var p11 = OpenPkcs11(cert, pin);
+            var rsaKey = p11 as RSA ?? (p11 == null ? cert.GetRSAPrivateKey() : null);
             if (rsaKey != null)
             {
                 signature = rsaKey.SignHash(hash, algName, RSASignaturePadding.Pkcs1);
             }
             else
             {
-                var ecdsaKey = cert.GetECDsaPrivateKey();
+                var ecdsaKey = p11 as ECDsa ?? (p11 == null ? cert.GetECDsaPrivateKey() : null);
                 if (ecdsaKey != null)
                     // CMS/PKCS#7 yêu cầu ECDSA signature ở định dạng DER SEQUENCE {r, s}
                     // (không phải IEEE P1363 raw r||s — mặc định của SignHash(hash))
@@ -63,7 +80,7 @@ public static class TokenSigner
     /// Dùng .NET SignedCms (chuẩn DER, tương thích Adobe Reader).
     /// Windows tự pop PIN dialog khi ComputeSignature trên smart card.
     /// </summary>
-    public static CmsResult SignCms(byte[] content, X509Certificate2 cert)
+    public static CmsResult SignCms(byte[] content, X509Certificate2 cert, string? pin = null)
     {
         try
         {
@@ -72,7 +89,8 @@ public static class TokenSigner
 
             // Lấy private key explicit để truyền vào CmsSigner
             // Tránh lỗi "Invalid type specified" với Smart Card KSP (CNG)
-            AsymmetricAlgorithm? privateKey = cert.GetRSAPrivateKey();
+            using var p11 = OpenPkcs11(cert, pin);
+            AsymmetricAlgorithm? privateKey = p11 ?? cert.GetRSAPrivateKey();
             if (privateKey == null) privateKey = cert.GetECDsaPrivateKey();
             if (privateKey == null)
                 return CmsResult.Fail("Không truy cập được private key (RSA/ECDSA)");
